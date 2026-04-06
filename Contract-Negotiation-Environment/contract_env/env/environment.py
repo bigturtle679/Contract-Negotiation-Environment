@@ -47,18 +47,12 @@ class ContractEnv:
     def _make_observation(self) -> Observation:
         assert self.current_task is not None
         ct = self.state_data["contract_text"]
-        t = self.current_task
         return Observation(
             contract_text=ct,
-            clause_type=t.clause_type,
-            risk_level=observation_risk_float(t, ct),
+            clause_type=self.current_task.clause_type,
+            risk_level=observation_risk_float(self.current_task, ct),
             step_count=self.current_step,
             negotiation_history=list(self.state_data["negotiation_history"]),
-            task_id=t.id,
-            task_name=t.name,
-            done=self.done,
-            max_steps=self.max_steps,
-            industry_context=t.industry_context,
         )
 
     def _validate_action(self, action: Action) -> Optional[str]:
@@ -72,13 +66,13 @@ class ContractEnv:
         assert self.current_task is not None
         info: dict[str, Any] = {}
         if self.done:
-            r = Reward(score=0.0, feedback="episode_done", metrics=None)
+            r = Reward(score=0.0, feedback="episode_done")
             return self._make_observation(), r, True, {"error": "already_done"}
 
         err = self._validate_action(action)
         if err:
             self.current_step += 1
-            r = Reward(score=0.0, feedback=f"invalid_action: {err}", metrics=None)
+            r = Reward(score=0.0, feedback=f"invalid_action: {err}")
             if self.current_step >= self.max_steps:
                 self.done = True
             info["error"] = err

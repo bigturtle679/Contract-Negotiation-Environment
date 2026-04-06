@@ -20,7 +20,7 @@ class TestAPI(unittest.TestCase):
         r = self.client.post("/reset")
         self.assertEqual(r.status_code, 200)
         data = r.json()
-        self.assertIn("task_id", data)
+        self.assertIn("clause_type", data)
         self.assertIn("risk_level", data)
         self.assertIn("negotiation_history", data)
         self.assertTrue(any("opponent|" in x for x in data["negotiation_history"]))

@@ -11,6 +11,12 @@ observation_space:
     - clause_type
     - risk_level
     - step_count
+    - negotiation_history
+    - task_id
+    - task_name
+    - done
+    - max_steps
+    - industry_context
 
 reward:
   range: [0.0, 1.0]

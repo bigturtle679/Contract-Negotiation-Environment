@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,7 @@ class Action(BaseModel):
 class Reward(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     feedback: str
+    metrics: Optional[dict[str, float]] = None
 
 
 class Observation(BaseModel):
@@ -27,6 +28,9 @@ class Observation(BaseModel):
     negotiation_history: list[str]
     task_id: str
     task_name: str
+    done: bool = False
+    max_steps: int = 5
+    industry_context: str = "general"
 
 
 class StepRequest(BaseModel):
@@ -38,4 +42,4 @@ class StepResponse(BaseModel):
     observation: Observation
     reward: Reward
     done: bool
-    info: dict
+    info: dict[str, Any]

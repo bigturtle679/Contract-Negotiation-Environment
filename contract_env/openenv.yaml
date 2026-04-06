@@ -1,0 +1,20 @@
+spec_version: 1
+name: contract_negotiation_env
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860
+entry_point: env.environment:ContractEnv
+
+observation_space:
+  type: object
+  description: JSON observation from ContractEnv (contract, history, risk metadata)
+
+action_space:
+  type: object
+  description: JSON action with action_type and optional content
+
+reward:
+  type: number
+  minimum: 0
+  maximum: 1

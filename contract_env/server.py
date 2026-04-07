@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from env.environment import ContractEnv
-from env.models import Action, StepRequest, StepResponse
+from contract_env.env.environment import ContractEnv
+from contract_env.env.models import Action, StepRequest, StepResponse
 
 _env = ContractEnv()
 

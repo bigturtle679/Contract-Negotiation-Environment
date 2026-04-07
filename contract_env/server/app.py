@@ -75,8 +75,19 @@ def get_state() -> dict[str, Any]:
 
 @app.post("/reset")
 def reset() -> dict[str, object]:
-    obs = _env.reset()
-    return obs.model_dump(mode="json")
+    try:
+        result = _env.reset()
+
+        # Handle different possible return formats safely
+        if isinstance(result, tuple):
+            obs = result[0]   # always take observation
+        else:
+            obs = result
+
+        return obs.model_dump(mode="json")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/step")

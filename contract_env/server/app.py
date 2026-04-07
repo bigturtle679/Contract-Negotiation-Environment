@@ -100,7 +100,12 @@ def main() -> None:
 
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "7860"))
-    uvicorn.run(app, host=host, port=port)
+
+    uvicorn.run(
+        "contract_env.server.app:app",
+        host=host,
+        port=port,
+    )
 
 
 if __name__ == "__main__":

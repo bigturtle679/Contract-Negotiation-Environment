@@ -31,7 +31,9 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "Contract Negotiation Env is running "}
+    return {"message": "Contract Negotiation Env is running ",
+            "status": "ok",
+            "service": "contract-negotiation-env",}
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

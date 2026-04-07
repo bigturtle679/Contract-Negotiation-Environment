@@ -1,3 +1,12 @@
+---
+title: Contract Negotiation Environment
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
 # Contract Negotiation Environment (OpenEnv)
 
 Deterministic, **production-leaning** RL-style environment for multi-step contract negotiation: flag risky clauses, edit language, propose counters, accept or reject. Rewards live in **`[0.0, 1.0]`** with an explicit decomposition (correctness · improvement · risk alignment) returned on each step for observability.

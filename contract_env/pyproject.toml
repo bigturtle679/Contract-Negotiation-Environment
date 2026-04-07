@@ -23,8 +23,8 @@ openenv = [
 ]
 
 [project.scripts]
-server = "server.app:main"
+server = "server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["env*", "server*"]
+include = ["env*"]

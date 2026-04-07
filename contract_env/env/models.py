@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-ActionType = Literal["FLAG", "REJECT", "EDIT_CLAUSE", "PROPOSE_COUNTER", "ACCEPT"]
-RiskLevel = Literal["LOW", "MODERATE", "HIGH"]
+ActionType = Literal[
+    "FLAG_RISK",
+    "EDIT_CLAUSE",
+    "ACCEPT",
+    "REJECT",
+    "PROPOSE_COUNTER",
+]
 
 
 class Action(BaseModel):
@@ -19,15 +24,11 @@ class Reward(BaseModel):
 
 
 class Observation(BaseModel):
-    task_id: str
-    task_name: str
     contract_text: str
     clause_type: str
-    risk_level: RiskLevel
-    negotiation_history: list[str]
+    risk_level: float = Field(ge=0.0, le=1.0)
     step_count: int
-    max_steps: int
-    done: bool
+    negotiation_history: list[str]
 
 
 class StepRequest(BaseModel):
@@ -39,4 +40,4 @@ class StepResponse(BaseModel):
     observation: Observation
     reward: Reward
     done: bool
-    info: dict
+    info: dict[str, Any]

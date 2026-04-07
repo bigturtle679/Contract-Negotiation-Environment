@@ -1,5 +1,0 @@
-pydantic==2.6.0
-python-dotenv
-fastapi
-uvicorn
-openai

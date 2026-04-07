@@ -9,13 +9,13 @@ from env.models import Action
 class TestContractEnv(unittest.TestCase):
     def test_reset_cycles_tasks_deterministically(self) -> None:
         env = ContractEnv()
-        ids = [env.reset().task_id for _ in range(6)]
-        self.assertEqual(ids[:3], ids[3:6])
+        clause_types = [env.reset().clause_type for _ in range(6)]
+        self.assertEqual(clause_types[:3], clause_types[3:6])
 
     def test_flag_then_edit_improves_contract(self) -> None:
         env = ContractEnv()
         env.reset()
-        env.step(Action(action_type="FLAG", content="flag note"))
+        env.step(Action(action_type="FLAG_RISK", content="flag note"))
         r = env.step(
             Action(action_type="EDIT_CLAUSE", content=env.current_task.expected_safe_edit)
         )

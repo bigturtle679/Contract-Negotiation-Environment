@@ -3,7 +3,11 @@ from __future__ import annotations
 import random
 from typing import Any, Optional, Tuple
 
-from env.graders import build_proposed_contract_for_step, grade_action
+from env.graders import (
+    build_proposed_contract_for_step,
+    evaluate_action,
+    observation_risk_float,
+)
 from env.models import Action, Observation, Reward
 from env.tasks import TASKS, NegotiationTask
 
@@ -27,30 +31,28 @@ class ContractEnv:
         self._reset_count += 1
         self.current_task = TASKS[idx]
         assert self.current_task is not None
+        t = self.current_task
+        history: list[str] = []
+        for line in t.opponent_opening:
+            history.append(f"opponent|{line}")
         self.state_data = {
-            "task_id": self.current_task.id,
-            "task_name": self.current_task.name,
-            "contract_text": self.current_task.contract_text,
-            "clause_type": self.current_task.clause_type,
-            "negotiation_history": [],
+            "task_id": t.id,
+            "task_name": t.name,
+            "contract_text": t.contract_text,
+            "clause_type": t.clause_type,
+            "negotiation_history": history,
         }
         return self._make_observation()
 
     def _make_observation(self) -> Observation:
         assert self.current_task is not None
-        rl: str = self.current_task.risk_level
-        if rl not in ("LOW", "MODERATE", "HIGH"):
-            rl = "HIGH"
+        ct = self.state_data["contract_text"]
         return Observation(
-            task_id=self.current_task.id,
-            task_name=self.current_task.name,
-            contract_text=self.state_data["contract_text"],
+            contract_text=ct,
             clause_type=self.current_task.clause_type,
-            risk_level=rl,  # type: ignore[arg-type]
-            negotiation_history=list(self.state_data["negotiation_history"]),
+            risk_level=observation_risk_float(self.current_task, ct),
             step_count=self.current_step,
-            max_steps=self.max_steps,
-            done=self.done,
+            negotiation_history=list(self.state_data["negotiation_history"]),
         )
 
     def _validate_action(self, action: Action) -> Optional[str]:
@@ -78,10 +80,13 @@ class ContractEnv:
 
         contract_before = self.state_data["contract_text"]
         proposed = build_proposed_contract_for_step(contract_before, action)
-        reward = grade_action(self.current_task, contract_before, action, proposed)
+        reward, grade_info = evaluate_action(
+            self.current_task, contract_before, action, proposed
+        )
+        info.update(grade_info)
 
         entry = (
-            f"step={self.current_step + 1} action={action.action_type} "
+            f"agent|step={self.current_step + 1} action={action.action_type} "
             f"content_len={len((action.content or '').strip())}"
         )
         self.state_data["negotiation_history"].append(entry)

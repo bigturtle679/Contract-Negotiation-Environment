@@ -22,6 +22,14 @@ class NegotiationTask(BaseModel):
     clause_type_weight: float = Field(
         default=1.0, ge=0.0, le=2.0, description="Boost for keyword-based risk signals."
     )
+    industry_context: str = Field(
+        default="saas_b2b",
+        description="Domain label for observation (e.g. employment vs SaaS playbook).",
+    )
+    opponent_opening: List[str] = Field(
+        default_factory=list,
+        description="Simulated counterparty lines prepended to negotiation history on reset.",
+    )
 
 
 TASKS: list[NegotiationTask] = [
@@ -59,6 +67,11 @@ TASKS: list[NegotiationTask] = [
         hidden_trap="",
         trap_markers=[],
         clause_type_weight=1.2,
+        industry_context="saas_b2b",
+        opponent_opening=[
+            "[Counterparty] We need vendor to stand behind the product—standard unlimited "
+            "indemnity is non-negotiable for us.",
+        ],
     ),
     NegotiationTask(
         id="medium_auto_renewal",
@@ -95,6 +108,11 @@ TASKS: list[NegotiationTask] = [
         hidden_trap="",
         trap_markers=[],
         clause_type_weight=1.0,
+        industry_context="saas_b2b",
+        opponent_opening=[
+            "[Counterparty] Auto-renewal protects our roadmap pricing—one calendar day is "
+            "enough notice because you get the renewal quote 30 days out.",
+        ],
     ),
     NegotiationTask(
         id="hard_conflicting_obligations",
@@ -137,5 +155,10 @@ TASKS: list[NegotiationTask] = [
             "unlimited change orders",
         ],
         clause_type_weight=1.15,
+        industry_context="professional_services",
+        opponent_opening=[
+            "[Counterparty] Agile means unlimited changes at sprint velocity—boilerplate "
+            "says this creates no extra duties beyond market norms.",
+        ],
     ),
 ]

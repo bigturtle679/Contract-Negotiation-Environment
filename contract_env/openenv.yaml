@@ -1,20 +1,16 @@
-spec_version: 1
-name: contract_negotiation_env
-type: space
-runtime: fastapi
-app: server.app:app
-port: 7860
+name: ContractNegotiationEnv
 entry_point: env.environment:ContractEnv
 
-observation_space:
-  type: object
-  description: JSON observation from ContractEnv (contract, history, risk metadata)
-
 action_space:
-  type: object
-  description: JSON action with action_type and optional content
+  type: discrete
+  values: [FLAG_RISK, EDIT_CLAUSE, ACCEPT, REJECT, PROPOSE_COUNTER]
+
+observation_space:
+  fields:
+    - contract_text
+    - clause_type
+    - risk_level
+    - step_count
 
 reward:
-  type: number
-  minimum: 0
-  maximum: 1
+  range: [0.0, 1.0]

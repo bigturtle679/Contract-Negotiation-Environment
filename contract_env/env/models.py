@@ -18,9 +18,9 @@ class Action(BaseModel):
     content: Optional[str] = None
 
 
+# ✅ FIX: simplified reward
 class Reward(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
-    feedback: str
 
 
 class Observation(BaseModel):
@@ -36,8 +36,10 @@ class StepRequest(BaseModel):
     content: Optional[str] = None
 
 
+# ❌ REMOVE Reward object nesting
+# ✅ Use dict instead
 class StepResponse(BaseModel):
     observation: Observation
-    reward: Reward
+    reward: dict[str, float]   # FIXED
     done: bool
     info: dict[str, Any]

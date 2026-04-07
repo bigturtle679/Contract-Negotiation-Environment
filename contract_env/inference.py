@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 import urllib.error
 import urllib.request
@@ -21,7 +22,7 @@ from env.graders import (
 from env.models import Action
 from env.tasks import TASKS, NegotiationTask
 
-BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:7860").rstrip("/")
+BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
 USE_DIRECT_ENV = os.getenv("USE_DIRECT_ENV", "").lower() in ("1", "true", "yes")
 API_BASE_URL = "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
@@ -34,12 +35,20 @@ def _http_post(path: str, payload: Optional[dict] = None) -> dict[str, Any]:
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {e.code}: {body}") from e
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if attempt == 1:
+                body = e.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"HTTP {e.code}: {body}") from e
+            continue
+        except Exception:
+            if attempt == 1:
+                raise
+            continue
+    raise RuntimeError("HTTP request failed after retries")
 
 
 def _risk_score(task: NegotiationTask, contract_text: str) -> float:
@@ -79,6 +88,7 @@ def _maybe_llm_improve(task: NegotiationTask, contract_text: str, action: Action
     if not should_call:
         return action
 
+    # HF_TOKEN must NOT have a default (per spec)
     key = os.getenv("HF_TOKEN")
     if not key:
         return action
@@ -193,7 +203,7 @@ def run_episode_direct(env: ContractEnv, initial_obs: dict[str, Any]) -> bool:
 
     max_iters = env.max_steps
     it = 0
-    while not done and it < max_iters:
+    while not done and it < max_iters and step_counter <= 20:
         it += 1
         step_counter += 1
 
@@ -250,7 +260,7 @@ def run_episode_http() -> bool:
 
     max_iters = ContractEnv.max_steps
     it = 0
-    while not done and it < max_iters:
+    while not done and it < max_iters and step_counter <= 20:
         it += 1
         step_counter += 1
 
@@ -289,6 +299,7 @@ def run_episode_http() -> bool:
 
 def main() -> None:
     load_dotenv()
+    random.seed(42)  # Deterministic seed for reproducibility
     p = argparse.ArgumentParser(description="Contract Negotiation Agent (OpenEnv)")
     p.add_argument("--episodes", type=int, default=1)
     p.add_argument("--direct", action="store_true", help="Use direct env (no HTTP).")

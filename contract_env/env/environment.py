@@ -8,8 +8,8 @@ from env.graders import (
     evaluate_action,
     observation_risk_float,
 )
-from env.models import Action, Observation, Reward
-from env.tasks import TASKS, NegotiationTask
+from contract_env.env.models import Action, Observation, Reward
+from contract_env.env.tasks import TASKS, NegotiationTask
 
 random.seed(42)
 

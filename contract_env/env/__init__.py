@@ -1,6 +1,6 @@
-from env.environment import ContractEnv
-from env.graders import evaluate_action, grade_action
-from env.models import Action, Observation, Reward
+from contract_env.env.environment import ContractEnv
+from contract_env.env.graders import evaluate_action, grade_action
+from contract_env.env.models import Action, Observation, Reward
 
 __all__ = [
     "ContractEnv",

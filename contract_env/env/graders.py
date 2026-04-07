@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any, Tuple
 
-from env.models import Action, Reward
-from env.tasks import NegotiationTask
+from contract_env.env.models import Action, Reward
+from contract_env.env.tasks import NegotiationTask
 
 
 def tokenize(text: str) -> list[str]:

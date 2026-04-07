@@ -22,7 +22,7 @@ dependencies = [
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]
-server = "contract_env.server.app:app"
+server = "contract_env.server.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

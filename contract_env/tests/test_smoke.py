@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from env.environment import ContractEnv
-from env.models import Action
+from contract_env.env.environment import ContractEnv
+from contract_env.env.models import Action
 
 
 class TestContractEnv(unittest.TestCase):

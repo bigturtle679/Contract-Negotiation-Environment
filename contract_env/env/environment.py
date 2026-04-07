@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Optional, Tuple
 
-from env.graders import (
+from contract_env.env.graders import (
     build_proposed_contract_for_step,
     evaluate_action,
     observation_risk_float,

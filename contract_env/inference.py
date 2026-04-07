@@ -12,15 +12,15 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from env.environment import ContractEnv
-from env.graders import (
+from contract_env.env.environment import ContractEnv
+from contract_env.env.graders import (
     effective_risk_high,
     keyword_match_score,
     score_action_hypothetical,
     trap_unresolved,
 )
-from env.models import Action
-from env.tasks import TASKS, NegotiationTask
+from contract_env.env.models import Action
+from contract_env.env.tasks import TASKS, NegotiationTask
 
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
 USE_DIRECT_ENV = os.getenv("USE_DIRECT_ENV", "").lower() in ("1", "true", "yes")

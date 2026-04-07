@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import unittest
 
-from env.graders import (
+from contract_env.env.graders import (
     contract_quality_score,
     effective_risk_high,
     evaluate_action,
     grade_action,
     token_overlap_ratio,
 )
-from env.models import Action
-from env.tasks import TASKS
+from contract_env.env.models import Action
+from contract_env.env.tasks import TASKS
 
 
 class TestGraders(unittest.TestCase):

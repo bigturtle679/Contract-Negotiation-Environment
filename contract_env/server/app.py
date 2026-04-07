@@ -11,14 +11,13 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from contract_env.env.environment import ContractEnv
-from contract_env.env.models import Action, StepRequest, StepResponse
+from contract_env.env.models import Action, StepRequest
 
 _env = ContractEnv()
 
 app = FastAPI(
     title="Contract Negotiation OpenEnv",
     version="1.1.0",
-    description="Multi-step contract negotiation RL environment with graded rewards.",
 )
 
 app.add_middleware(
@@ -29,93 +28,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ---------------- ROOT ----------------
 @app.get("/")
 def root():
-    return {"message": "Contract Negotiation Env is running ",
-            "status": "ok",
-            "service": "contract-negotiation-env",}
+    return {"status": "ok", "service": "contract-negotiation-env"}
 
+
+# ---------------- ERROR HANDLERS ----------------
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail, "path": str(request.url.path)},
+        content={"detail": exc.detail},
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def validation_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "internal_error",
-            "path": str(request.url.path),
-            "error": str(exc),
-            "trace": traceback.format_exc() if os.getenv("DEBUG") == "1" else None,
+            "detail": str(exc),
+            "trace": traceback.format_exc(),
         },
     )
 
 
+# ---------------- HEALTH ----------------
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "contract-negotiation-env"}
+def health():
+    return {"status": "ok"}
 
 
+# ---------------- STATE ----------------
 @app.get("/state")
-def get_state() -> dict[str, Any]:
+def get_state():
     return _env.state()
 
 
+# ---------------- RESET (FIXED) ----------------
 @app.post("/reset")
-def reset() -> dict[str, object]:
+def reset():
     try:
-        result = _env.reset()
+        obs = _env.reset()
 
-        # Handle different possible return formats safely
-        if isinstance(result, tuple):
-            obs = result[0]   # always take observation
-        else:
-            obs = result
-
-        return obs.model_dump(mode="json")
+        return {
+            "observation": obs.model_dump()
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------- STEP (FIXED) ----------------
 @app.post("/step")
-def step(req: StepRequest) -> dict[str, object]:
+def step(req: StepRequest):
     try:
         action = Action(action_type=req.action_type, content=req.content)
+
+        obs, reward, done, info = _env.step(action)
+
+        return {
+            "observation": obs.model_dump(),
+            "reward": {"score": reward},  # CRITICAL FIX
+            "done": done,
+            "info": info,
+        }
+
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors()) from e
-    obs, reward, done, info = _env.step(action)
-    body = StepResponse(
-        observation=obs,
-        reward=reward,
-        done=done,
-        info=info,
-    )
-    return body.model_dump(mode="json")
+        raise HTTPException(status_code=422, detail=e.errors())
 
 
-def main() -> None:
+# ---------------- MAIN ----------------
+def main():
     import uvicorn
-
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "7860"))
 
     uvicorn.run(
         "contract_env.server.app:app",
-        host=host,
-        port=port,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 7860)),
     )
 
 

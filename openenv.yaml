@@ -5,6 +5,18 @@ action_space:
   type: discrete
   values: [FLAG_RISK, EDIT_CLAUSE, ACCEPT, REJECT, PROPOSE_COUNTER]
 
+tasks:
+  - id: easy_unlimited_liability
+    grader: contract_env.env.graders:grade_easy
+  - id: medium_auto_renewal
+    grader: contract_env.env.graders:grade_medium
+  - id: hard_conflicting_obligations
+    grader: contract_env.env.graders:grade_hard
+  - id: easy_compliance_agreement
+    grader: contract_env.env.graders:grade_easy_plus
+  - id: hard_intellectual_property
+    grader: contract_env.env.graders:grade_hard_plus
+
 observation_space:
   fields:
     - contract_text

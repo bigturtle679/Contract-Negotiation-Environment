@@ -24,6 +24,16 @@ class ContractEnv:
         self.done: bool = False
         self.state_data: dict[str, Any] = {}
 
+    @property
+    def tasks(self) -> list[str]:
+        from contract_env.env.tasks import TASKS
+        return [task.id for task in TASKS]
+
+    @property
+    def graders(self) -> dict:
+        from contract_env.env.graders import TASK_GRADERS
+        return TASK_GRADERS
+
     def reset(self) -> Observation:
         self.done = False
         self.current_step = 0

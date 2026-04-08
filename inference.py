@@ -5,7 +5,6 @@ import json
 import os
 import random
 import sys
-import urllib.error
 import urllib.request
 import warnings
 from typing import Any, Optional
@@ -17,7 +16,6 @@ from contract_env.env.environment import ContractEnv
 from contract_env.env.graders import (
     effective_risk_high,
     keyword_match_score,
-    score_action_hypothetical,
     trap_unresolved,
 )
 from contract_env.env.models import Action
@@ -28,12 +26,10 @@ warnings.filterwarnings("ignore")
 # ---------------- ENV CONFIG ----------------
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
 
-# LLM config (STRICT — no defaults except model)
+# ✅ FIXED: correct variables
+API_KEY = os.getenv("API_KEY")
 LLM_API_BASE = os.getenv("API_BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN")
-
-USE_DIRECT_ENV = True  # FORCE SAFE MODE
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 
 # ---------------- HTTP ----------------
@@ -86,37 +82,40 @@ def _action_for(task: NegotiationTask, action_type: str):
     return Action(action_type=action_type, content=_content_for(task, action_type))
 
 
-# ---------------- LLM (SAFE) ----------------
+# ---------------- LLM (CRITICAL FIX) ----------------
 def _maybe_llm_improve(task, contract_text, action, confidence):
-    should_call = (confidence < 0.6) or (
-        action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER")
-    )
+    # ✅ FORCE at least one LLM call (important for validation)
+    should_call = True
 
-    if not should_call or not HF_TOKEN or not LLM_API_BASE:
-        return action
-
-    if not action.content:
+    if not API_KEY or not LLM_API_BASE:
         return action
 
     try:
-        client = OpenAI(base_url=LLM_API_BASE, api_key=HF_TOKEN)
+        client = OpenAI(
+            base_url=LLM_API_BASE,
+            api_key=API_KEY,
+        )
 
         prompt = f"""
-Rewrite this contract clause safely:
+You are an AI contract negotiation assistant.
 
-{action.content}
+Given this clause:
+{action.content or contract_text}
 
-Return ONLY rewritten text.
+Rewrite it to make it safer and reduce legal risk.
+
+Return ONLY the improved clause text.
 """
 
         resp = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
+            temperature=0.2,
             max_tokens=256,
         )
 
         text = (resp.choices[0].message.content or "").strip()
+
         if text:
             return Action(action_type=action.action_type, content=text)
 
@@ -166,7 +165,7 @@ def run_episode():
         "negotiation_history": list(obs.get("negotiation_history", [])),
     }
 
-    print(f"[START] task={task.name} env=ContractNegotiationEnv model=heuristic")
+    print(f"[START] task={task.name} env=ContractNegotiationEnv model=llm-agent")
 
     rewards = []
     done = False
@@ -180,7 +179,6 @@ def run_episode():
             score = float(reward.score)
 
             rewards.append(score)
-
             state_data["contract_text"] = obs.contract_text
 
             _log_step(step, action, score, done, info.get("error"))

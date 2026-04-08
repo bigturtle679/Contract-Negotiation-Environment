@@ -11,6 +11,7 @@ observation_space:
     - clause_type
     - risk_level
     - step_count
+    - negotiation_history
 
 reward:
   range: (0.0, 1.0)  # Strictly between 0 and 1, in practice [0.001, 0.999]

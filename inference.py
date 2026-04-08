@@ -26,8 +26,8 @@ warnings.filterwarnings("ignore")
 # ---------------- ENV CONFIG ----------------
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
 
-# ✅ FIXED: correct variables
-API_KEY = os.getenv("API_KEY")
+# LLM auth supports either API_KEY or HF_TOKEN for compatibility with Hugging Face router usage.
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
 LLM_API_BASE = os.getenv("API_BASE_URL")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 

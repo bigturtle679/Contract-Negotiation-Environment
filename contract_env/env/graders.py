@@ -158,3 +158,12 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
         base = min(1.0, base + 0.25)
 
     return round(base, 4)
+
+def grade_action(
+    task: NegotiationTask,
+    contract_before: str,
+    action: Action,
+    proposed_contract_text: str,
+) -> Reward:
+    reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
+    return reward

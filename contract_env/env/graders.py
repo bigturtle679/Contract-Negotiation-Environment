@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Tuple
+from typing import Any, Tuple, TYPE_CHECKING
 
 from contract_env.env.models import Action, Reward
-from contract_env.env.tasks import NegotiationTask
+
+if TYPE_CHECKING:
+    from contract_env.env.tasks import NegotiationTask
 
 
 def tokenize(text: str) -> list[str]:

@@ -1,5 +1,5 @@
 name: ContractNegotiationEnv
-entry_point: env.environment:ContractEnv
+entry_point: contract_env.env.environment:ContractEnv
 
 action_space:
   type: discrete

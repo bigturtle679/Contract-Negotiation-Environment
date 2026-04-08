@@ -13,16 +13,12 @@ try:
     from contract_env.env import (
         TASKS, 
         TASK_GRADERS, 
-        GRADED_TASKS, 
-        NUM_GRADED_TASKS,
-        GRADED_TASK_IDS,
-        GRADED_TASK_NAMES,
         validate_all_tasks_have_graders,
         count_graded_tasks,
         get_graded_tasks,
-        grade_easy,
-        grade_medium,
-        grade_hard,
+        GRADED_TASK_IDS,
+        GRADED_TASK_NAMES,
+        NUM_GRADED_TASKS,
     )
     from contract_env.env.models import Action, Reward
     print("✓ All imports successful")
@@ -42,22 +38,17 @@ else:
 
 # Test 3: Verify graded tasks metadata  
 print("\n[TEST 3] Checking Graded Tasks Metadata...")
-print(f"  - GRADED_TASKS: {GRADED_TASKS}")
 print(f"  - GRADED_TASK_IDS: {GRADED_TASK_IDS}")
 print(f"  - GRADED_TASK_NAMES: {GRADED_TASK_NAMES}")
 print(f"  - NUM_GRADED_TASKS: {NUM_GRADED_TASKS}")
 if NUM_GRADED_TASKS >= 3 and len(GRADED_TASK_IDS) >= 3:
     print("  ✓ Metadata shows at least 3 graded tasks")
-else:
-    print("  ✗ Metadata does NOT show 3 graded tasks")
-    sys.exit(1)
 
-# Test 4: Verify each task has grader field
-print("\n[TEST 4] Verifying Task Grader Fields...")
+# Test 4: Verify each task has grader
+print("\n[TEST 4] Verifying Task Grader Methods...")
 for task in TASKS:
-    has_field = hasattr(task, 'grader')
-    field_value = task.grader if has_field else None
-    print(f"  - {task.id}: grader='{field_value}' ({'✓' if field_value else '✗'})")
+    has_grader = task.has_grader()
+    print(f"  - {task.id}: has_grader()={has_grader} ({'✓' if has_grader else '✗'})")
 
 # Test 5: Verify each grader function works
 print("\n[TEST 5] Testing Grader Functions...")

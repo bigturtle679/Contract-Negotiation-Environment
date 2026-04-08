@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List
+from typing import TYPE_CHECKING, Any, Callable, List, Self
 
 from pydantic import BaseModel, Field
 
@@ -28,9 +28,8 @@ class NegotiationTask(BaseModel):
     )
     industry_context: str = Field(default="saas_b2b")
     opponent_opening: List[str] = Field(default_factory=list)
-    grader: str
     
-    def get_grader(self) -> Callable[[NegotiationTask, str, Any, str], Reward]:
+    def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:
         """Resolve grader function by name from the graders module."""
         # Lazy import to avoid circular dependency
         from contract_env.env.graders import TASK_GRADERS
@@ -46,6 +45,12 @@ class NegotiationTask(BaseModel):
             return True
         except (ValueError, KeyError):
             return False
+    
+    def grader(self, contract_before: str, action: "Action", proposed_contract_text: str) -> "Reward":
+        """Grade an action for this task using the assigned grader function."""
+        grader_func = self.get_grader()
+        return grader_func(self, contract_before, action, proposed_contract_text)
+
 
 
 # ---------------- TASKS ----------------
@@ -88,7 +93,6 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited indemnity is standard and non-negotiable."
         ],
-        grader="grade_easy",
     ),
 
     NegotiationTask(
@@ -126,7 +130,6 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] One-day notice is sufficient since pricing is shared earlier."
         ],
-        grader="grade_medium",
     ),
 
     NegotiationTask(
@@ -170,14 +173,13 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited changes are standard in agile delivery."
         ],
-        grader="grade_hard",
     ),
 ]
 
 # ============ GRADED TASK VALIDATION ============
 def get_graded_tasks() -> list[NegotiationTask]:
     """Return list of all tasks that have graders explicitly configured."""
-    graded = [task for task in TASKS if task.grader]
+    graded = [task for task in TASKS if task.has_grader()]
     return graded
 
 def count_graded_tasks() -> int:
@@ -186,19 +188,17 @@ def count_graded_tasks() -> int:
 
 def validate_all_tasks_have_graders() -> bool:
     """Validate that all tasks have grader functions accessible."""
-    from contract_env.env.graders import TASK_GRADERS
-    
     graded_count = count_graded_tasks()
     if graded_count < 3:  # Must have at least 3 graded tasks
         return False
     
-    # Check that all task IDs with graders are in TASK_GRADERS registry
+    # Check that all tasks have callable graders
     for task in TASKS:
-        if task.grader and task.id not in TASK_GRADERS:
+        if not task.has_grader():
             return False
     return True
 
 # Metadata - just count tasks with grader field set
-GRADED_TASK_IDS = [task.id for task in TASKS if task.grader]
-GRADED_TASK_NAMES = [task.name for task in TASKS if task.grader]
+GRADED_TASK_IDS = [task.id for task in TASKS if task.has_grader()]
+GRADED_TASK_NAMES = [task.name for task in TASKS if task.has_grader()]
 NUM_GRADED_TASKS = len(GRADED_TASK_IDS)

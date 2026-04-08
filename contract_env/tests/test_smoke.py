@@ -19,8 +19,8 @@ class TestContractEnv(unittest.TestCase):
         r = env.step(
             Action(action_type="EDIT_CLAUSE", content=env.current_task.expected_safe_edit)
         )
-        self.assertGreaterEqual(r[1].score, 0.0)
-        self.assertLessEqual(r[1].score, 1.0)
+        self.assertGreater(r[1], 0.0)
+        self.assertLess(r[1], 1.0)
 
     def test_accept_high_risk_zero_reward(self) -> None:
         env = ContractEnv()
@@ -31,7 +31,7 @@ class TestContractEnv(unittest.TestCase):
             env.reset()
         o, r, done, _ = env.step(Action(action_type="ACCEPT", content=None))
         self.assertTrue(done)
-        self.assertEqual(r.score, 0.0)
+        self.assertEqual(r, 0.01)
 
 
 if __name__ == "__main__":

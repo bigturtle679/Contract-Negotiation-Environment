@@ -4,7 +4,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from server import app
+from contract_env.server.app import app
 
 
 class TestAPI(unittest.TestCase):
@@ -20,10 +20,11 @@ class TestAPI(unittest.TestCase):
         r = self.client.post("/reset")
         self.assertEqual(r.status_code, 200)
         data = r.json()
-        self.assertIn("clause_type", data)
-        self.assertIn("risk_level", data)
-        self.assertIn("negotiation_history", data)
-        self.assertTrue(any("opponent|" in x for x in data["negotiation_history"]))
+        obs = data["observation"]
+        self.assertIn("clause_type", obs)
+        self.assertIn("risk_level", obs)
+        self.assertIn("negotiation_history", obs)
+        self.assertTrue(any("opponent|" in x for x in obs["negotiation_history"]))
 
     def test_step_invalid_action_low_reward(self) -> None:
         self.client.post("/reset")
@@ -34,7 +35,7 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertIn("error", body["info"])
-        self.assertEqual(body["reward"]["score"], 0.0)
+        self.assertEqual(body["reward"]["score"], 0.01)
 
     def test_state_endpoint(self) -> None:
         self.client.post("/reset")

@@ -118,10 +118,6 @@ def evaluate_action(
     # ✅ STRICT RANGE FIX (0 < score < 1)
     score = max(0.01, min(0.99, score))
 
-    # Prevent invalid accept on risky contract
-    if action.action_type == "ACCEPT" and eff_high:
-        score = 0.01
-
     reward = Reward(score=round(score, 4))
 
     info = {
@@ -132,6 +128,11 @@ def evaluate_action(
             "risk_alignment": round(risk_al, 4),
         },
     }
+
+    # Prevent invalid accept on risky contract
+    if action.action_type == "ACCEPT" and eff_high:
+        reward.score = 0.01
+        info["accept_blocked"] = True
 
     return reward, info
 
@@ -161,6 +162,10 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
         base = min(1.0, base + 0.25)
 
     return round(base, 4)
+
+
+def contract_quality_score(task: NegotiationTask, contract_text: str) -> float:
+    return 1.0 - observation_risk_float(task, contract_text)
 
 
 def grade_action(

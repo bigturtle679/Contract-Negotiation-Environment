@@ -134,6 +134,10 @@ Return ONLY the improved clause text.
 
         if text:
             return Action(action_type=action.action_type, content=text)        
+
+    except Exception:
+        pass
+
     return action
 
 

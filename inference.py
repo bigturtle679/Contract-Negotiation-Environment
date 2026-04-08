@@ -24,15 +24,15 @@ from contract_env.env.tasks import TASKS, NegotiationTask
 warnings.filterwarnings("ignore")
 
 # ---------------- ENV CONFIG ----------------
-BASE_URL = os.environ.get("API_BASE_URL")  # ✅ NO fallback
-
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
 
 # ---------------- HTTP ----------------
 def _http_post(path: str, payload: Optional[dict] = None) -> dict[str, Any]:
     try:
-        url = f"{BASE_URL}{path}"
+        url = f"{API_BASE_URL}{path}"
         data = None
         headers = {"Content-Type": "application/json"}
 
@@ -83,8 +83,8 @@ def _action_for(task: NegotiationTask, action_type: str):
 def _force_llm_call(contract_text: str):
     try:
         client = OpenAI(
-            base_url=os.environ["API_BASE_URL"],   # ✅ MUST
-            api_key=os.environ["API_KEY"],         # ✅ MUST
+            base_url=API_BASE_URL,
+            api_key=HF_TOKEN,
         )
 
         resp = client.chat.completions.create(
@@ -108,8 +108,8 @@ def _maybe_llm_improve(task, contract_text, action):
 
     try:
         client = OpenAI(
-            base_url=os.environ["API_BASE_URL"],
-            api_key=os.environ["API_KEY"],
+            base_url=API_BASE_URL,
+            api_key=HF_TOKEN,
         )
 
         prompt = f"""
@@ -166,9 +166,9 @@ def _choose(task, state_data, step):
 
 # ---------------- LOGGING ----------------
 def _log_step(step, action, reward, done, err):
-    err_token = "error=null" if not err else f'error="{err}"'
+    err_token = "null" if not err else err
     print(
-        f"[STEP] step={step} action={action.action_type} reward={reward:.2f} done={str(done).lower()} {err_token}",
+        f"[STEP] step={step} action={action.action_type} reward={reward:.2f} done={str(done).lower()} error={err_token}",
         flush=True,
     )
 
@@ -185,7 +185,7 @@ def run_episode():
         "negotiation_history": list(obs.get("negotiation_history", [])),
     }
 
-    print(f"[START] task={task.name} env=ContractNegotiationEnv model=llm-agent")
+    print(f"[START] task={task.name} env=ContractNegotiationEnv model={MODEL_NAME}", flush=True)
 
     rewards = []
     done = False
@@ -207,13 +207,14 @@ def run_episode():
 
         final_score = sum(rewards) / max(len(rewards), 1)
 
+        rewards_str = ",".join(f"{r:.2f}" for r in rewards)
         print(
-            f"[END] success={str(final_score >= 0.5).lower()} steps={step} score={final_score:.2f} rewards={','.join(map(str, rewards))}"
+            f"[END] success={str(final_score >= 0.5).lower()} steps={step} score={final_score:.2f} rewards={rewards_str}", flush=True
         )
 
     except Exception as e:
-        print(f'[STEP] step=0 action=NONE reward=0.001 done=true error="{str(e)}"')
-        print("[END] success=false steps=0 score=0.001 rewards=")
+        print(f'[STEP] step=0 action=NONE reward=0.00 done=true error={str(e)}', flush=True)
+        print("[END] success=false steps=0 score=0.00 rewards=", flush=True)
         return
 
 

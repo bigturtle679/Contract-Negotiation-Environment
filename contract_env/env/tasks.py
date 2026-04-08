@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List, Self
+from typing import TYPE_CHECKING, Any, Callable, List
 
 from pydantic import BaseModel, Field
 

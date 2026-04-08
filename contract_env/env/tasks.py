@@ -30,21 +30,31 @@ class NegotiationTask(BaseModel):
     opponent_opening: List[str] = Field(default_factory=list)
     grader: Any
 
-    def get_grader(self) -> Callable[..., "Reward"]:
-        """Return the grader function assigned to this task."""
-        return self.grader
+    def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:
+        """Resolve grader function by task id from the graders module."""
+        from contract_env.env.graders import TASK_GRADERS
+
+        if self.id not in TASK_GRADERS:
+            raise ValueError(
+                f"No grader found for task {self.id}. Available tasks: {list(TASK_GRADERS.keys())}"
+            )
+        return TASK_GRADERS[self.id]
 
     def has_grader(self) -> bool:
         """Check if this task has a valid grader function."""
-        return callable(self.grader)
+        try:
+            self.get_grader()
+            return True
+        except (ValueError, KeyError):
+            return False
 
     def grade(self, contract_before: str, action: "Action", proposed_contract_text: str) -> "Reward":
-        """Grade an action for this task using its assigned grader."""
-        return self.grader(self, contract_before, action, proposed_contract_text)
+        """Grade an action for this task using the assigned grader."""
+        grader_func = self.get_grader()
+        return grader_func(self, contract_before, action, proposed_contract_text)
 
 
 # Import grader functions after class definition to avoid circular import
-from contract_env.env.graders import grade_easy, grade_medium, grade_hard
 
 # ---------------- TASKS ----------------
 TASKS: list[NegotiationTask] = [
@@ -86,7 +96,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited indemnity is standard and non-negotiable."
         ],
-        grader=grade_easy,
+        grader="grade_easy",
     ),
 
     NegotiationTask(
@@ -124,7 +134,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] One-day notice is sufficient since pricing is shared earlier."
         ],
-        grader=grade_medium,
+        grader="grade_medium",
     ),
 
     NegotiationTask(
@@ -168,7 +178,80 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited changes are standard in agile delivery."
         ],
-        grader=grade_hard,
+        grader="grade_hard",
+    ),
+
+    NegotiationTask(
+        id="easy_compliance_agreement",
+        name="EASY_PLUS",
+        contract_text=(
+            "8. COMPLIANCE. Supplier shall comply with all applicable laws, regulations, "
+            "and standards applicable to its services and operations, including data privacy "
+            "requirements and export controls."
+        ),
+        clause_type="compliance",
+        risk_keywords=[
+            "compliance",
+            "applicable laws",
+            "export controls",
+            "data privacy",
+        ],
+        safe_keywords=[
+            "regulatory",
+            "standards",
+            "privacy",
+            "best efforts",
+        ],
+        expected_safe_edit=(
+            "Supplier shall comply with all applicable laws and industry standards, "
+            "including data privacy regulations, and shall promptly notify Customer of any material breach."
+        ),
+        risk_level="LOW",
+        hidden_trap="",
+        trap_markers=[],
+        clause_type_weight=0.9,
+        industry_context="saas_b2b",
+        opponent_opening=[
+            "[Counterparty] Compliance wording is boilerplate and not negotiable."
+        ],
+        grader="grade_easy_plus",
+    ),
+
+    NegotiationTask(
+        id="hard_intellectual_property",
+        name="HARD_PLUS",
+        contract_text=(
+            "17. INTELLECTUAL PROPERTY. All IP created under this agreement belongs to Supplier, "
+            "even if the Customer provides specifications or feedback, unless expressly agreed otherwise."
+        ),
+        clause_type="intellectual_property",
+        risk_keywords=[
+            "belongs to Supplier",
+            "expressly agreed otherwise",
+            "created under this agreement",
+            "feedback",
+        ],
+        safe_keywords=[
+            "joint ownership",
+            "customer materials",
+            "license",
+            "retention",
+        ],
+        expected_safe_edit=(
+            "IP created under this agreement shall be owned by Customer, with Supplier receiving a license to use Customer materials only as necessary to perform the services."
+        ),
+        risk_level="HIGH",
+        hidden_trap="",
+        trap_markers=[
+            "feedback",
+            "customer provides specifications",
+        ],
+        clause_type_weight=1.25,
+        industry_context="professional_services",
+        opponent_opening=[
+            "[Counterparty] IP ownership is standard vendor-owned language."
+        ],
+        grader="grade_hard_plus",
     ),
 ]
 

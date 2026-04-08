@@ -4,13 +4,15 @@ import unittest
 
 from contract_env.env.environment import ContractEnv
 from contract_env.env.models import Action
+from contract_env.env.tasks import TASKS
 
 
 class TestContractEnv(unittest.TestCase):
     def test_reset_cycles_tasks_deterministically(self) -> None:
         env = ContractEnv()
-        clause_types = [env.reset().clause_type for _ in range(6)]
-        self.assertEqual(clause_types[:3], clause_types[3:6])
+        num_tasks = len(TASKS)
+        clause_types = [env.reset().clause_type for _ in range(num_tasks * 2)]
+        self.assertEqual(clause_types[:num_tasks], clause_types[num_tasks: num_tasks * 2])
 
     def test_flag_then_edit_improves_contract(self) -> None:
         env = ContractEnv()

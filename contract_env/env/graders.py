@@ -195,13 +195,23 @@ def grade_hard(task: NegotiationTask, contract_before: str, action: Action, prop
     return grade_action(task, contract_before, action, proposed_contract_text)
 
 
+def grade_easy_plus(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
+    return grade_action(task, contract_before, action, proposed_contract_text)
+
+
+def grade_hard_plus(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
+    return grade_action(task, contract_before, action, proposed_contract_text)
+
+
 # ============ GRADER REGISTRY ============
 # Explicit mapping of task IDs to their grader functions
-# This ensures the validator can detect that all 3 tasks have graders
+# This ensures the validator can detect that all graded tasks have graders
 TASK_GRADERS = {
     "easy_unlimited_liability": grade_easy,
     "medium_auto_renewal": grade_medium,
     "hard_conflicting_obligations": grade_hard,
+    "easy_compliance_agreement": grade_easy_plus,
+    "hard_intellectual_property": grade_hard_plus,
 }
 
 # List of graded task IDs for validator inspection

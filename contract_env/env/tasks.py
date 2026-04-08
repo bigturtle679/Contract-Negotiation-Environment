@@ -28,20 +28,21 @@ class NegotiationTask(BaseModel):
     )
     industry_context: str = Field(default="saas_b2b")
     opponent_opening: List[str] = Field(default_factory=list)
-    grader: Any = Field(exclude=True)
+    grader_func: Any = Field(exclude=True)
+    grader: str = Field(default="")
     grader_name: str
 
     def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:
         """Return the grader function assigned to this task."""
-        return self.grader
+        return self.grader_func
 
     def has_grader(self) -> bool:
         """Check if this task has a valid grader function."""
-        return callable(self.grader)
+        return callable(self.grader_func)
 
     def grade(self, contract_before: str, action: "Action", proposed_contract_text: str) -> "Reward":
         """Grade an action for this task using the assigned grader."""
-        return self.grader(self, contract_before, action, proposed_contract_text)
+        return self.grader_func(self, contract_before, action, proposed_contract_text)
 
 
 # Import grader functions after class definition to avoid circular import
@@ -93,7 +94,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited indemnity is standard and non-negotiable."
         ],
-        grader=grade_easy,
+        grader_func=grade_easy,
+        grader="contract_env.env.graders:grade_easy",
         grader_name="grade_easy",
     ),
 
@@ -132,7 +134,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] One-day notice is sufficient since pricing is shared earlier."
         ],
-        grader=grade_medium,
+        grader_func=grade_medium,
+        grader="contract_env.env.graders:grade_medium",
         grader_name="grade_medium",
     ),
 
@@ -177,7 +180,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited changes are standard in agile delivery."
         ],
-        grader=grade_hard,
+        grader_func=grade_hard,
+        grader="contract_env.env.graders:grade_hard",
         grader_name="grade_hard",
     ),
 
@@ -214,7 +218,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Compliance wording is boilerplate and not negotiable."
         ],
-        grader=grade_easy_plus,
+        grader_func=grade_easy_plus,
+        grader="contract_env.env.graders:grade_easy_plus",
         grader_name="grade_easy_plus",
     ),
 
@@ -252,7 +257,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] IP ownership is standard vendor-owned language."
         ],
-        grader=grade_hard_plus,
+        grader_func=grade_hard_plus,
+        grader="contract_env.env.graders:grade_hard_plus",
         grader_name="grade_hard_plus",
     ),
 ]

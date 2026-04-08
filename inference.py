@@ -192,8 +192,8 @@ def run_episode():
         )
 
     except Exception as e:
-        print(f'[STEP] step=0 action=NONE reward=0.00 done=true error="{str(e)}"')
-        print("[END] success=false steps=0 score=0.00 rewards=")
+        print(f'[STEP] step=0 action=NONE reward=0.001 done=true error="{str(e)}"')
+        print("[END] success=false steps=0 score=0.001 rewards=")
         sys.exit(0)
 
 

@@ -115,7 +115,7 @@ def evaluate_action(
     # ---------- FINAL SCORE ----------
     score = 0.4 * correctness + 0.3 * improvement + 0.3 * risk_al
 
-    # ✅ STRICT RANGE FIX (0 < score < 1)
+    # ✅ STRICT RANGE FIX: strictly between 0 and 1, clamped to [0.001, 0.999]
     score = max(0.001, min(0.999, score))
 
     reward = Reward(score=round(score, 4))
@@ -161,6 +161,7 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
     if task.name == "HARD" and trap_unresolved(task, contract_text):
         base = min(1.0, base + 0.25)
 
+    # ✅ STRICT RANGE FIX: strictly between 0 and 1, clamped to [0.001, 0.999]
     base = min(0.999, max(0.001, base))
     return round(base, 4)
 

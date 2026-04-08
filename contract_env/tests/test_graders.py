@@ -21,8 +21,8 @@ class TestGraders(unittest.TestCase):
         task = TASKS[0]
         a = Action(action_type="FLAG_RISK", content="note")
         r = grade_action(task, task.contract_text, a, task.contract_text)
-        self.assertGreaterEqual(r.score, 0.0)
-        self.assertLessEqual(r.score, 1.0)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
 
     def test_accept_high_risk_forces_zero(self) -> None:
         task = next(t for t in TASKS if t.name == "EASY")

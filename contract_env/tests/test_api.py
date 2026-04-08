@@ -35,7 +35,7 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertIn("error", body["info"])
-        self.assertEqual(body["reward"]["score"], 0.01)
+        self.assertEqual(body["reward"]["score"], 0.001)
 
     def test_state_endpoint(self) -> None:
         self.client.post("/reset")

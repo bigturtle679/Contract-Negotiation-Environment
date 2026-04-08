@@ -116,7 +116,7 @@ def evaluate_action(
     score = 0.4 * correctness + 0.3 * improvement + 0.3 * risk_al
 
     # ✅ STRICT RANGE FIX (0 < score < 1)
-    score = max(0.01, min(0.99, score))
+    score = max(0.001, min(0.999, score))
 
     reward = Reward(score=round(score, 4))
 
@@ -131,7 +131,7 @@ def evaluate_action(
 
     # Prevent invalid accept on risky contract
     if action.action_type == "ACCEPT" and eff_high:
-        reward.score = 0.01
+        reward.score = 0.001
         info["accept_blocked"] = True
 
     return reward, info
@@ -161,7 +161,7 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
     if task.name == "HARD" and trap_unresolved(task, contract_text):
         base = min(1.0, base + 0.25)
 
-    base = min(0.99, max(0.01, base))
+    base = min(0.999, max(0.001, base))
     return round(base, 4)
 
 

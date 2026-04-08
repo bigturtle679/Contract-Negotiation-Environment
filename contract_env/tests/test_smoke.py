@@ -31,7 +31,7 @@ class TestContractEnv(unittest.TestCase):
             env.reset()
         o, r, done, _ = env.step(Action(action_type="ACCEPT", content=None))
         self.assertTrue(done)
-        self.assertEqual(r, 0.01)
+        self.assertEqual(r, 0.001)
 
 
 if __name__ == "__main__":

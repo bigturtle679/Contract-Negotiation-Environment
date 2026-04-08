@@ -24,6 +24,7 @@ class NegotiationTask(BaseModel):
     )
     industry_context: str = Field(default="saas_b2b")
     opponent_opening: List[str] = Field(default_factory=list)
+    grader: str
 
 
 # ---------------- TASKS ----------------
@@ -66,6 +67,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited indemnity is standard and non-negotiable."
         ],
+        grader="grade_easy",
     ),
 
     NegotiationTask(
@@ -103,6 +105,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] One-day notice is sufficient since pricing is shared earlier."
         ],
+        grader="grade_medium",
     ),
 
     NegotiationTask(
@@ -146,5 +149,6 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited changes are standard in agile delivery."
         ],
+        grader="grade_hard",
     ),
 ]

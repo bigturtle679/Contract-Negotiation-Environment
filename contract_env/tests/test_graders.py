@@ -28,14 +28,14 @@ class TestGraders(unittest.TestCase):
         task = next(t for t in TASKS if t.name == "EASY")
         prop = task.contract_text
         r, info = evaluate_action(task, prop, Action(action_type="ACCEPT"), prop)
-        self.assertEqual(r.score, 0.01)
+        self.assertEqual(r.score, 0.001)
         self.assertTrue(info.get("accept_blocked"))
 
     def test_moderate_accept_on_draft_forces_zero(self) -> None:
         task = next(t for t in TASKS if t.name == "MEDIUM")
         prop = task.contract_text
         r, _ = evaluate_action(task, prop, Action(action_type="ACCEPT"), prop)
-        self.assertEqual(r.score, 0.01)
+        self.assertEqual(r.score, 0.001)
 
     def test_edit_improves_metrics(self) -> None:
         task = TASKS[0]

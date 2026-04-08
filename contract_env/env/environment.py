@@ -87,7 +87,7 @@ class ContractEnv:
                 self.done = True
 
             info["error"] = err
-            return self._make_observation(), 0.01, self.done, info
+            return self._make_observation(), 0.001, self.done, info
 
         contract_before = self.state_data["contract_text"]
         proposed = build_proposed_contract_for_step(contract_before, action)

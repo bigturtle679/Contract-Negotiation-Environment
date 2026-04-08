@@ -10,12 +10,24 @@ from contract_env.env.graders import (
     NUM_GRADED_TASKS,
 )
 from contract_env.env.models import Action, Observation, Reward
+from contract_env.env.tasks import (
+    NegotiationTask,
+    TASKS,
+    get_graded_tasks,
+    count_graded_tasks,
+    validate_all_tasks_have_graders,
+    GRADED_TASK_IDS,
+    GRADED_TASK_NAMES,
+    NUM_GRADED_TASKS as TASKS_NUM_GRADED,
+)
 
 __all__ = [
     "ContractEnv",
     "Action",
     "Observation",
     "Reward",
+    "NegotiationTask",
+    "TASKS",
     "evaluate_action",
     "grade_action",
     "grade_easy",
@@ -24,4 +36,9 @@ __all__ = [
     "TASK_GRADERS",
     "GRADED_TASKS",
     "NUM_GRADED_TASKS",
+    "get_graded_tasks",
+    "count_graded_tasks",
+    "validate_all_tasks_have_graders",
+    "GRADED_TASK_IDS",
+    "GRADED_TASK_NAMES",
 ]

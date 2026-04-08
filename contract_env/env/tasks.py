@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from typing import List
+from typing import TYPE_CHECKING, Any, Callable, List
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from contract_env.env.models import Reward
+    from contract_env.env.models import Action
 
 
 class NegotiationTask(BaseModel):
@@ -25,6 +29,23 @@ class NegotiationTask(BaseModel):
     industry_context: str = Field(default="saas_b2b")
     opponent_opening: List[str] = Field(default_factory=list)
     grader: str
+    
+    def get_grader(self) -> Callable[[NegotiationTask, str, Any, str], Reward]:
+        """Resolve grader function by name from the graders module."""
+        # Lazy import to avoid circular dependency
+        from contract_env.env.graders import TASK_GRADERS
+        
+        if self.id not in TASK_GRADERS:
+            raise ValueError(f"No grader found for task {self.id}. Available tasks: {list(TASK_GRADERS.keys())}")
+        return TASK_GRADERS[self.id]
+    
+    def has_grader(self) -> bool:
+        """Check if this task has a valid grader function."""
+        try:
+            self.get_grader()
+            return True
+        except (ValueError, KeyError):
+            return False
 
 
 # ---------------- TASKS ----------------
@@ -152,3 +173,32 @@ TASKS: list[NegotiationTask] = [
         grader="grade_hard",
     ),
 ]
+
+# ============ GRADED TASK VALIDATION ============
+def get_graded_tasks() -> list[NegotiationTask]:
+    """Return list of all tasks that have graders explicitly configured."""
+    graded = [task for task in TASKS if task.grader]
+    return graded
+
+def count_graded_tasks() -> int:
+    """Return the number of tasks with graders."""
+    return len(get_graded_tasks())
+
+def validate_all_tasks_have_graders() -> bool:
+    """Validate that all tasks have grader functions accessible."""
+    from contract_env.env.graders import TASK_GRADERS
+    
+    graded_count = count_graded_tasks()
+    if graded_count < 3:  # Must have at least 3 graded tasks
+        return False
+    
+    # Check that all task IDs with graders are in TASK_GRADERS registry
+    for task in TASKS:
+        if task.grader and task.id not in TASK_GRADERS:
+            return False
+    return True
+
+# Metadata - just count tasks with grader field set
+GRADED_TASK_IDS = [task.id for task in TASKS if task.grader]
+GRADED_TASK_NAMES = [task.name for task in TASKS if task.grader]
+NUM_GRADED_TASKS = len(GRADED_TASK_IDS)

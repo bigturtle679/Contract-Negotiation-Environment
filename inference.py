@@ -196,7 +196,7 @@ def run_episode():
             action = _choose(task, state_data, step)
 
             obs, reward, done, info = env.step(action)
-            score = float(reward.score)
+            score = float(reward)
 
             rewards.append(score)
             state_data["contract_text"] = obs.contract_text
@@ -214,7 +214,7 @@ def run_episode():
     except Exception as e:
         print(f'[STEP] step=0 action=NONE reward=0.001 done=true error="{str(e)}"')
         print("[END] success=false steps=0 score=0.001 rewards=")
-        sys.exit(0)
+        return
 
 
 def main():

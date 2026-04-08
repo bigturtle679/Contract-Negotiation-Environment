@@ -161,6 +161,7 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
     if task.name == "HARD" and trap_unresolved(task, contract_text):
         base = min(1.0, base + 0.25)
 
+    base = min(0.99, max(0.01, base))
     return round(base, 4)
 
 

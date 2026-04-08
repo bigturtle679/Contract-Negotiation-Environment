@@ -23,7 +23,6 @@ def token_overlap_ratio(a: str, b: str) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
-# ✅ FIXED: now works with List[str]
 def _weighted_risk_hits(text: str, risk_keywords: list[str]) -> float:
     low = text.lower()
     if not risk_keywords:
@@ -113,11 +112,15 @@ def evaluate_action(
     eff_high = effective_risk_high(task, proposed_contract_text)
     risk_al = action_risk_alignment(action.action_type, eff_high, task)
 
+    # ---------- FINAL SCORE ----------
     score = 0.4 * correctness + 0.3 * improvement + 0.3 * risk_al
-    score = max(0.0, min(1.0, score))
 
+    # ✅ STRICT RANGE FIX (0 < score < 1)
+    score = max(0.01, min(0.99, score))
+
+    # Prevent invalid accept on risky contract
     if action.action_type == "ACCEPT" and eff_high:
-        score = 0.0
+        score = 0.01
 
     reward = Reward(score=round(score, 4))
 
@@ -158,6 +161,7 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
         base = min(1.0, base + 0.25)
 
     return round(base, 4)
+
 
 def grade_action(
     task: NegotiationTask,

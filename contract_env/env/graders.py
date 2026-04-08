@@ -191,3 +191,21 @@ def grade_medium(task: NegotiationTask, contract_before: str, action: Action, pr
 
 def grade_hard(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
     return grade_action(task, contract_before, action, proposed_contract_text)
+
+
+# ============ GRADER REGISTRY ============
+# Explicit mapping of task IDs to their grader functions
+# This ensures the validator can detect that all 3 tasks have graders
+TASK_GRADERS = {
+    "easy_unlimited_liability": grade_easy,
+    "medium_auto_renewal": grade_medium,
+    "hard_conflicting_obligations": grade_hard,
+}
+
+# List of graded task IDs for validator inspection
+GRADED_TASKS = list(TASK_GRADERS.keys())
+
+# Count of tasks with graders
+NUM_GRADED_TASKS = len(GRADED_TASKS)
+
+assert NUM_GRADED_TASKS >= 3, f"Expected at least 3 graded tasks, got {NUM_GRADED_TASKS}"

@@ -177,3 +177,16 @@ def grade_action(
 ) -> Reward:
     reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
     return reward
+
+
+# Specific graders for each task
+def grade_easy(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
+    return grade_action(task, contract_before, action, proposed_contract_text)
+
+
+def grade_medium(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
+    return grade_action(task, contract_before, action, proposed_contract_text)
+
+
+def grade_hard(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
+    return grade_action(task, contract_before, action, proposed_contract_text)

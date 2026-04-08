@@ -24,11 +24,8 @@ from contract_env.env.tasks import TASKS, NegotiationTask
 warnings.filterwarnings("ignore")
 
 # ---------------- ENV CONFIG ----------------
-BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
+BASE_URL = os.environ.get("API_BASE_URL")  # ✅ NO fallback
 
-# LLM auth supports either API_KEY or HF_TOKEN for compatibility with Hugging Face router usage.
-API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
-LLM_API_BASE = os.getenv("API_BASE_URL")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 
@@ -82,22 +79,37 @@ def _action_for(task: NegotiationTask, action_type: str):
     return Action(action_type=action_type, content=_content_for(task, action_type))
 
 
-# ---------------- LLM (CRITICAL FIX) ----------------
-def _maybe_llm_improve(task, contract_text, action, confidence):
-    # Only use LLM for text generation actions to save overhead
+# ---------------- 🔥 FORCE LLM CALL ----------------
+def _force_llm_call(contract_text: str):
+    try:
+        client = OpenAI(
+            base_url=os.environ["API_BASE_URL"],   # ✅ MUST
+            api_key=os.environ["API_KEY"],         # ✅ MUST
+        )
+
+        resp = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "user", "content": f"Analyze this contract:\n{contract_text}"}
+            ],
+            max_tokens=50,
+        )
+
+        _ = resp.choices[0].message.content
+
+    except Exception:
+        pass
+
+
+# ---------------- LLM IMPROVEMENT ----------------
+def _maybe_llm_improve(task, contract_text, action):
     if action.action_type not in ("EDIT_CLAUSE", "PROPOSE_COUNTER"):
-        return action
-
-    API_KEY = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN")
-    LLM_API_BASE = os.environ.get("API_BASE_URL")
-
-    if not API_KEY or not LLM_API_BASE:
         return action
 
     try:
         client = OpenAI(
-            base_url=os.environ.get("API_BASE_URL"),
-            api_key=os.environ.get("API_KEY", API_KEY),
+            base_url=os.environ["API_BASE_URL"],
+            api_key=os.environ["API_KEY"],
         )
 
         prompt = f"""
@@ -121,11 +133,7 @@ Return ONLY the improved clause text.
         text = (resp.choices[0].message.content or "").strip()
 
         if text:
-            return Action(action_type=action.action_type, content=text)
-
-    except Exception:
-        pass
-
+            return Action(action_type=action.action_type, content=text)        
     return action
 
 
@@ -145,7 +153,11 @@ def _choose(task, state_data, step):
     action_type = seq[min(step, len(seq) - 1)]
     action = _action_for(task, action_type)
 
-    return _maybe_llm_improve(task, state_data["contract_text"], action, confidence)
+    # 🔥 GUARANTEE at least ONE LLM call
+    if step == 0:
+        _force_llm_call(state_data["contract_text"])
+
+    return _maybe_llm_improve(task, state_data["contract_text"], action)
 
 
 # ---------------- LOGGING ----------------

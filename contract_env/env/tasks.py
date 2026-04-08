@@ -28,33 +28,30 @@ class NegotiationTask(BaseModel):
     )
     industry_context: str = Field(default="saas_b2b")
     opponent_opening: List[str] = Field(default_factory=list)
-    grader: Any
+    grader: Any = Field(exclude=True)
+    grader_name: str
 
     def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:
-        """Resolve grader function by task id from the graders module."""
-        from contract_env.env.graders import TASK_GRADERS
-
-        if self.id not in TASK_GRADERS:
-            raise ValueError(
-                f"No grader found for task {self.id}. Available tasks: {list(TASK_GRADERS.keys())}"
-            )
-        return TASK_GRADERS[self.id]
+        """Return the grader function assigned to this task."""
+        return self.grader
 
     def has_grader(self) -> bool:
         """Check if this task has a valid grader function."""
-        try:
-            self.get_grader()
-            return True
-        except (ValueError, KeyError):
-            return False
+        return callable(self.grader)
 
     def grade(self, contract_before: str, action: "Action", proposed_contract_text: str) -> "Reward":
         """Grade an action for this task using the assigned grader."""
-        grader_func = self.get_grader()
-        return grader_func(self, contract_before, action, proposed_contract_text)
+        return self.grader(self, contract_before, action, proposed_contract_text)
 
 
 # Import grader functions after class definition to avoid circular import
+from contract_env.env.graders import (
+    grade_easy,
+    grade_medium,
+    grade_hard,
+    grade_easy_plus,
+    grade_hard_plus,
+)
 
 # ---------------- TASKS ----------------
 TASKS: list[NegotiationTask] = [
@@ -96,7 +93,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited indemnity is standard and non-negotiable."
         ],
-        grader="grade_easy",
+        grader=grade_easy,
+        grader_name="grade_easy",
     ),
 
     NegotiationTask(
@@ -134,7 +132,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] One-day notice is sufficient since pricing is shared earlier."
         ],
-        grader="grade_medium",
+        grader=grade_medium,
+        grader_name="grade_medium",
     ),
 
     NegotiationTask(
@@ -178,7 +177,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited changes are standard in agile delivery."
         ],
-        grader="grade_hard",
+        grader=grade_hard,
+        grader_name="grade_hard",
     ),
 
     NegotiationTask(
@@ -214,7 +214,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Compliance wording is boilerplate and not negotiable."
         ],
-        grader="grade_easy_plus",
+        grader=grade_easy_plus,
+        grader_name="grade_easy_plus",
     ),
 
     NegotiationTask(
@@ -251,7 +252,8 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] IP ownership is standard vendor-owned language."
         ],
-        grader="grade_hard_plus",
+        grader=grade_hard_plus,
+        grader_name="grade_hard_plus",
     ),
 ]
 

@@ -28,6 +28,7 @@ class NegotiationTask(BaseModel):
     )
     industry_context: str = Field(default="saas_b2b")
     opponent_opening: List[str] = Field(default_factory=list)
+    grader: str
     
     def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:
         """Resolve grader function by name from the graders module."""
@@ -46,7 +47,7 @@ class NegotiationTask(BaseModel):
         except (ValueError, KeyError):
             return False
     
-    def grader(self, contract_before: str, action: "Action", proposed_contract_text: str) -> "Reward":
+    def grade(self, contract_before: str, action: "Action", proposed_contract_text: str) -> "Reward":
         """Grade an action for this task using the assigned grader function."""
         grader_func = self.get_grader()
         return grader_func(self, contract_before, action, proposed_contract_text)
@@ -93,6 +94,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited indemnity is standard and non-negotiable."
         ],
+        grader="grade_easy",
     ),
 
     NegotiationTask(
@@ -130,6 +132,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] One-day notice is sufficient since pricing is shared earlier."
         ],
+        grader="grade_medium",
     ),
 
     NegotiationTask(
@@ -173,6 +176,7 @@ TASKS: list[NegotiationTask] = [
         opponent_opening=[
             "[Counterparty] Unlimited changes are standard in agile delivery."
         ],
+        grader="grade_hard",
     ),
 ]
 

@@ -197,16 +197,18 @@ def run_episode():
         sys.exit(0)
 
 
-# ---------------- MAIN ----------------
 def main():
     load_dotenv()
     random.seed(42)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=1)
+    parser.add_argument("--episodes", type=int, default=5)
+    parser.add_argument("--benchmark", action="store_true")
     args = parser.parse_args()
 
-    for _ in range(args.episodes):
+    episodes_to_run = len(TASKS) if args.benchmark else args.episodes
+
+    for _ in range(episodes_to_run):
         run_episode()
 
 

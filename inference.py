@@ -82,36 +82,29 @@ def _action_for(task: NegotiationTask, action_type: str):
     return Action(action_type=action_type, content=_content_for(task, action_type))
 
 
-LLM_CACHE = {}
-
 # ---------------- LLM (CRITICAL FIX) ----------------
 def _maybe_llm_improve(task, contract_text, action, confidence):
-    # Only use LLM for text generation actions
+    # Only use LLM for text generation actions to save overhead
     if action.action_type not in ("EDIT_CLAUSE", "PROPOSE_COUNTER"):
         return action
 
-    # Hybrid approach: use LLM only if confidence is relatively low
-    if confidence >= 0.8:
-        return action
+    API_KEY = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN")
+    LLM_API_BASE = os.environ.get("API_BASE_URL")
 
     if not API_KEY or not LLM_API_BASE:
         return action
 
-    prompt_clause = (action.content or contract_text)
-    if prompt_clause in LLM_CACHE:
-        return Action(action_type=action.action_type, content=LLM_CACHE[prompt_clause])
-
     try:
         client = OpenAI(
-            base_url=LLM_API_BASE,
-            api_key=API_KEY,
+            base_url=os.environ.get("API_BASE_URL"),
+            api_key=os.environ.get("API_KEY", API_KEY),
         )
 
         prompt = f"""
 You are an AI contract negotiation assistant.
 
 Given this clause:
-{prompt_clause}
+{action.content or contract_text}
 
 Rewrite it to make it safer and reduce legal risk.
 
@@ -122,13 +115,12 @@ Return ONLY the improved clause text.
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=60,
+            max_tokens=256,
         )
 
         text = (resp.choices[0].message.content or "").strip()
 
         if text:
-            LLM_CACHE[prompt_clause] = text
             return Action(action_type=action.action_type, content=text)
 
     except Exception:

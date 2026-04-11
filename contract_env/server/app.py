@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -41,7 +41,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,7 +112,7 @@ def get_state():
 
 # ── RESET ───────────────────────────────────────────────────────────────
 @app.post("/reset")
-def reset(body: Optional[ResetRequest] = None):
+def reset(body: Optional[ResetRequest] = None) -> dict[str, Any]:
     """Start a new episode.
 
     Optionally pass ``{"task_id": "..."}`` to target a specific task;
@@ -124,13 +124,14 @@ def reset(body: Optional[ResetRequest] = None):
         return {"observation": obs.model_dump()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error during /reset")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── STEP ────────────────────────────────────────────────────────────────
 @app.post("/step")
-def step(req: StepRequest):
+def step(req: StepRequest) -> dict[str, Any]:
     try:
         action = Action(action_type=req.action_type, content=req.content)
         obs, reward, done, info = _env.step(action)
@@ -144,6 +145,9 @@ def step(req: StepRequest):
 
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
+    except Exception:
+        logger.exception("Unexpected error during /step")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── SCHEMA ──────────────────────────────────────────────────────────────
@@ -160,7 +164,7 @@ def get_schema():
 
 # ── EVALUATE QUALITY ─────────────────────────────────────────────────────
 @app.post("/evaluate-quality")
-def evaluate_quality(body: EvaluateQualityRequest):
+def evaluate_quality(body: EvaluateQualityRequest) -> dict[str, float]:
     """Score an arbitrary contract text against the current task.
 
     Body: {"contract_text": "..."}

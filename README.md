@@ -251,9 +251,10 @@ python inference.py --benchmark --mode api
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `HF_TOKEN` | Yes | — | HuggingFace / LLM API key |
+| `HF_TOKEN` | Yes | — | HuggingFace / LLM API key (falls back to `API_KEY` if unset) |
 | `API_BASE_URL` | No | `https://router.huggingface.co/v1` | LLM API endpoint |
 | `MODEL_NAME` | No | `Qwen/Qwen2.5-72B-Instruct` | Model identifier |
+| `LOCAL_IMAGE_NAME` | No | `contract-negotiation-env` | Docker image name for `from_docker_image()` client usage |
 | `BENCHMARK` | No | `contract_negotiation` | Benchmark name in [START] log line |
 | `ENV_SERVER_URL` | No | `http://localhost:7860` | Docker server URL (for `--mode api`) |
 | `PORT` | No | `7860` | Server port |

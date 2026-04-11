@@ -1,13 +1,19 @@
 """
-Inference Script — Contract Negotiation Environment
-=====================================================
-LLM-driven agent that analyses contract clauses, identifies legal risks,
-and proposes safer alternatives through multi-turn negotiation.
+Inference Script Example
+===================================
+MANDATORY
+- Before submitting, ensure the following variables are defined in your
+  environment configuration:
+    API_BASE_URL     The API endpoint for the LLM.
+    MODEL_NAME       The model identifier to use for inference.
+    HF_TOKEN         Your Hugging Face / API key.
+    LOCAL_IMAGE_NAME The name of the local Docker image to use for the
+                     environment if you are using from_docker_image() method.
 
-MANDATORY environment variables:
-    API_BASE_URL   The API endpoint for the LLM.
-    MODEL_NAME     The model identifier to use for inference.
-    HF_TOKEN       Your Hugging Face / API key.
+- Defaults are set only for API_BASE_URL and MODEL_NAME
+  (and should reflect your active inference setup):
+    API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+    MODEL_NAME   = os.getenv("MODEL_NAME",   "Qwen/Qwen2.5-72B-Instruct")
 
 STDOUT FORMAT (strictly followed):
     [START] task=<task_id> env=<benchmark> model=<model_name>
@@ -26,7 +32,7 @@ import logging
 import os
 import random
 import re
-from typing import Any, Optional
+from typing import Any, Optional, get_args
 
 try:
     from dotenv import load_dotenv
@@ -40,9 +46,10 @@ from contract_env.env.environment import ContractEnv
 from contract_env.env.graders import (
     effective_risk_high,
     keyword_match_score,
+    observation_risk_float,
     trap_unresolved,
 )
-from contract_env.env.models import Action
+from contract_env.env.models import Action, ActionType
 from contract_env.env.tasks import TASKS, NegotiationTask
 
 log = logging.getLogger(__name__)
@@ -53,6 +60,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 BENCHMARK = os.getenv("BENCHMARK", "contract_negotiation")
 ENV_SERVER_URL = os.getenv("ENV_SERVER_URL", "http://localhost:7860")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "contract-negotiation-env")
 MAX_STEPS = 10
 SUCCESS_SCORE_THRESHOLD = 0.5
 HISTORY_WINDOW = 8                      # How many recent history entries to show the LLM
@@ -139,7 +147,7 @@ def _llm_chat(
             if attempt == _MAX_RETRIES:
                 raise
             log.warning("[DEBUG] LLM call attempt %d failed: %s", attempt + 1, exc)
-    return ""
+    raise RuntimeError("LLM call failed after all retries")  # unreachable; satisfies type-checker
 
 
 def _parse_llm_json(text: str) -> Optional[dict]:
@@ -273,7 +281,7 @@ def _build_rewrite_prompt(
     ]
 
 
-_VALID_ACTIONS = {"FLAG_RISK", "EDIT_CLAUSE", "ACCEPT", "REJECT", "PROPOSE_COUNTER"}
+_VALID_ACTIONS = set(get_args(ActionType))
 
 # Optimal action sequences per intent level for rule-based fallback.
 # MODERATE tasks front-load PROPOSE_COUNTER since it's the ideal action for
@@ -455,7 +463,6 @@ def _choose(
 
     # ── 4d. Smart ACCEPT gate: only accept when quality actually improved ─
     if action_type == "ACCEPT":
-        from contract_env.env.graders import observation_risk_float
         current_risk = observation_risk_float(task, contract_text)
         original_risk = observation_risk_float(task, task.contract_text)
         # Block acceptance if the contract hasn't improved meaningfully
@@ -518,20 +525,25 @@ class _HTTPEnvClient:
     def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    def reset(self):
-        resp = self._session.post(f"{self.base_url}/reset", timeout=self._timeout)
+    def reset(self, task_id: Optional[str] = None):
+        body: dict[str, Any] = {}
+        if task_id is not None:
+            body["task_id"] = task_id
+        resp = self._session.post(
+            f"{self.base_url}/reset", json=body or None, timeout=self._timeout,
+        )
         resp.raise_for_status()
         data = resp.json()
         obs = data["observation"]
         # Map to a NegotiationTask if possible (for _choose() to use)
-        task_id = None
+        resolved_task_id = None
         try:
             state = self._session.get(f"{self.base_url}/state", timeout=self._timeout).json()
-            task_id = state.get("task_id")
+            resolved_task_id = state.get("task_id")
         except Exception:
             pass
-        if task_id:
-            self.current_task = next((t for t in TASKS if t.id == task_id), None)
+        if resolved_task_id:
+            self.current_task = next((t for t in TASKS if t.id == resolved_task_id), None)
         if self.current_task is None:
             self.current_task = TASKS[self._task_idx % len(TASKS)]
             self._task_idx += 1
@@ -568,16 +580,12 @@ def run_episode(env, task_id: Optional[str] = None) -> tuple[float, str]:
 
     Args:
         env: Environment instance (ContractEnv or _HTTPEnvClient).
-        task_id: If given, reset to this specific task (local mode only).
+        task_id: If given, reset to this specific task.
 
     Returns (mean_episode_score, task_id).
     """
     if task_id is not None:
-        try:
-            obs_obj = env.reset(task_id=task_id)
-        except TypeError:
-            # env.reset() doesn't accept task_id (e.g., _HTTPEnvClient)
-            obs_obj = env.reset()
+        obs_obj = env.reset(task_id=task_id)
     else:
         obs_obj = env.reset()
     task = env.current_task
@@ -690,6 +698,15 @@ def main() -> None:
         env = ContractEnv()
         print("[CONFIG] mode=local", flush=True)
 
+    try:
+        _run_episodes(env, args)
+    finally:
+        if hasattr(env, "close"):
+            env.close()
+
+
+def _run_episodes(env, args) -> None:
+    """Execute episode loop, retries, and print summary."""
     episodes_to_run = len(TASKS) if args.benchmark else args.episodes
 
     total_score = 0.0

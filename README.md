@@ -209,7 +209,7 @@ An episode is considered successful if `score ≥ 0.50`.
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest contract_env/tests/ -v   # 42 tests
+python -m pytest contract_env/tests/ -v   # 51 tests
 ```
 
 ### Run the server

@@ -50,6 +50,8 @@ BENCHMARK = os.getenv("BENCHMARK", "contract_negotiation")
 ENV_SERVER_URL = os.getenv("ENV_SERVER_URL", "http://localhost:7860")
 MAX_STEPS = 10
 SUCCESS_SCORE_THRESHOLD = 0.5
+HISTORY_WINDOW = 8                      # How many recent history entries to show the LLM
+ACCEPT_IMPROVEMENT_THRESHOLD = 0.05     # Minimum risk reduction before acceptance allowed
 
 # ── LLM CLIENT (lazy singleton) ─────────────────────────────────────────
 _client: Optional[OpenAI] = None
@@ -377,7 +379,7 @@ def _choose(
     """LLM-driven action selection with rule-based fallback and opponent awareness."""
     contract_text = state_data["contract_text"]
     history = state_data.get("negotiation_history", [])
-    history_summary = "\n".join(history[-8:]) if history else ""
+    history_summary = "\n".join(history[-HISTORY_WINDOW:]) if history else ""
 
     # ── 0. Parse opponent stance and track concessions ───────────────────
     opponent_stance = _parse_opponent_stance(history)
@@ -452,7 +454,7 @@ def _choose(
         current_risk = observation_risk_float(task, contract_text)
         original_risk = observation_risk_float(task, task.contract_text)
         # Block acceptance if the contract hasn't improved meaningfully
-        if current_risk >= original_risk - 0.05:
+        if current_risk >= original_risk - ACCEPT_IMPROVEMENT_THRESHOLD:
             if effective_risk_high(task, contract_text) or trap_unresolved(task, contract_text):
                 action_type = "EDIT_CLAUSE"
 

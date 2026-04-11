@@ -12,6 +12,11 @@ from contract_env.env.graders import (
     grade_hard,
     grade_easy_plus,
     grade_hard_plus,
+    grade_medium_plus,
+    grade_hard_plus2,
+    grade_expert,
+    clause_completeness_score,
+    semantic_similarity,
     token_overlap_ratio,
 )
 from contract_env.env.models import Action
@@ -107,6 +112,93 @@ class TestGraders(unittest.TestCase):
     def test_all_tasks_have_graders(self) -> None:
         for task in TASKS:
             self.assertTrue(task.has_grader(), f"Task {task.id} missing grader")
+
+    # ── NEW: Tests for new graders ──────────────────────────────────────
+    def test_grade_medium_plus_rewards_scoped_nda(self) -> None:
+        task = next(t for t in TASKS if t.name == "MEDIUM_PLUS")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_medium_plus(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_medium_plus_penalises_overbroad_accept(self) -> None:
+        task = next(t for t in TASKS if t.name == "MEDIUM_PLUS")
+        r = grade_medium_plus(task, task.contract_text,
+                              Action(action_type="ACCEPT"), task.contract_text)
+        # Accepting overbroad NDA should be penalised
+        r_edit = grade_medium_plus(task, task.contract_text,
+                                   Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                                   task.expected_safe_edit)
+        self.assertGreater(r_edit.score, r.score)
+
+    def test_grade_hard_plus2_rewards_cure_period(self) -> None:
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_hard_plus2(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_hard_plus2_penalises_unresolved(self) -> None:
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        action = Action(action_type="EDIT_CLAUSE", content=task.contract_text)
+        r_bad = grade_hard_plus2(task, task.contract_text, action, task.contract_text)
+        r_good = grade_hard_plus2(task, task.contract_text,
+                                  Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                                  task.expected_safe_edit)
+        self.assertGreater(r_good.score, r_bad.score)
+
+    def test_grade_expert_rewards_gdpr_language(self) -> None:
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_expert(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_expert_penalises_unresolved_data_traps(self) -> None:
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        action = Action(action_type="EDIT_CLAUSE", content=task.contract_text)
+        r_bad = grade_expert(task, task.contract_text, action, task.contract_text)
+        r_good = grade_expert(task, task.contract_text,
+                              Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                              task.expected_safe_edit)
+        self.assertGreater(r_good.score, r_bad.score)
+
+    # ── NEW: Tests for enhanced scoring metrics ─────────────────────────
+    def test_clause_completeness_score_full(self) -> None:
+        score = clause_completeness_score("capped at twelve months, no consequential or punitive",
+                                          ["capped", "twelve", "consequential", "punitive"])
+        self.assertEqual(score, 1.0)
+
+    def test_clause_completeness_score_partial(self) -> None:
+        score = clause_completeness_score("capped at twelve months",
+                                          ["capped", "twelve", "consequential", "punitive"])
+        self.assertEqual(score, 0.5)
+
+    def test_clause_completeness_score_empty_requirements(self) -> None:
+        score = clause_completeness_score("any text", [])
+        self.assertEqual(score, 1.0)
+
+    def test_semantic_similarity_identical(self) -> None:
+        sim = semantic_similarity("hello world test", "hello world test")
+        self.assertAlmostEqual(sim, 1.0, places=2)
+
+    def test_semantic_similarity_different(self) -> None:
+        sim = semantic_similarity("hello world test", "completely unrelated xyz")
+        self.assertLess(sim, 0.5)
+
+    def test_evaluate_action_returns_new_grade_fields(self) -> None:
+        """Verify evaluate_action returns semantic_similarity and completeness in grade info."""
+        task = TASKS[0]
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        _, info = evaluate_action(task, task.contract_text, action, task.expected_safe_edit)
+        grade = info["grade"]
+        self.assertIn("semantic_similarity", grade)
+        self.assertIn("completeness", grade)
+
+    def test_eight_graded_tasks(self) -> None:
+        """Ensure we have at least 8 graded tasks."""
+        graded = [t for t in TASKS if t.has_grader()]
+        self.assertGreaterEqual(len(graded), 8)
 
 
 if __name__ == "__main__":

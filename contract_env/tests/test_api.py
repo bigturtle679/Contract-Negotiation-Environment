@@ -47,8 +47,8 @@ class TestAPI(unittest.TestCase):
         r = self.client.get("/tasks")
         self.assertEqual(r.status_code, 200)
         data = r.json()
-        self.assertGreaterEqual(data["total"], 5)
-        self.assertGreaterEqual(data["graded"], 3)
+        self.assertGreaterEqual(data["total"], 8)
+        self.assertGreaterEqual(data["graded"], 8)
         self.assertEqual(len(data["tasks"]), data["total"])
         for t in data["tasks"]:
             self.assertIn("id", t)

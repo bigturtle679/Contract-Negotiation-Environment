@@ -76,10 +76,10 @@ When analysing a clause you MUST return **valid JSON** with exactly this schema:
 }
 
 Action selection rules:
-- HIGH risk clause (unlimited liability, IP trap, conflicting obligations):
+- HIGH risk clause (unlimited liability, IP trap, conflicting obligations, one-sided termination, data misuse):
     Step 1: FLAG_RISK. Step 2+: EDIT_CLAUSE with a concrete safe rewrite.
-- MODERATE risk (short notice periods, auto-renewal traps):
-    Use PROPOSE_COUNTER with balanced language (e.g., 60-day notice).
+- MODERATE risk (short notice periods, auto-renewal traps, overbroad NDAs):
+    Use PROPOSE_COUNTER with balanced language (e.g., 60-day notice, time-limited NDA).
 - LOW risk (compliance, boilerplate):
     EDIT_CLAUSE to add notification/reporting obligations, then ACCEPT.
 - REJECT only for terms so extreme they cannot be salvaged.
@@ -92,6 +92,13 @@ For liability tasks, cap language: "liability capped at fees paid in the
 preceding twelve (12) months; no consequential or punitive damages."
 For auto-renewal tasks, include: "sixty (60) days prior written notice."
 For compliance tasks, include: "promptly notify Customer of any material breach."
+For confidentiality/NDA tasks, include: time limit (e.g., 3 years), carve-outs for
+publicly available information, and scope limitations.
+For termination tasks, include: mutual termination rights, cure period of at least
+30 days, and transition/wind-down provisions.
+For data protection tasks, include: Data Processing Agreement reference, 72-hour
+breach notification, sub-processor consent requirements, data subject rights
+assistance, and data deletion upon termination.
 
 Return ONLY the JSON object — no markdown fences, no commentary, no extra text.
 """
@@ -142,7 +149,7 @@ def _parse_llm_json(text: str) -> Optional[dict]:
 def _risk_score(task: NegotiationTask, contract_text: str) -> float:
     hits = keyword_match_score(contract_text, task.risk_keywords)
     rs = min(1.0, hits * task.clause_type_weight / 1.15)
-    if task.name in ("HARD", "HARD_PLUS") and trap_unresolved(task, contract_text):
+    if task.name in ("HARD", "HARD_PLUS", "HARD_PLUS2", "EXPERT") and trap_unresolved(task, contract_text):
         rs = min(1.0, rs + 0.25)
     return round(rs, 6)
 
@@ -221,6 +228,32 @@ def _build_rewrite_prompt(
             "- Grant Supplier only a limited license to use Customer materials\n"
             "- Remove any supplier-ownership language\n"
         )
+    elif task.clause_type == "confidentiality":
+        user_msg += (
+            "- Limit confidentiality obligation to three (3) years from disclosure\n"
+            "- Add carve-outs for publicly available information\n"
+            "- Add carve-out for independently developed information\n"
+            "- Allow disclosure required by law or court order\n"
+            "- Permit sharing with employees and advisors under NDA\n"
+        )
+    elif task.clause_type == "termination":
+        user_msg += (
+            "- Make termination rights mutual (either party)\n"
+            "- Require sixty (60) days' prior written notice for convenience termination\n"
+            "- Add thirty (30) day cure period for material breach\n"
+            "- Include transition/wind-down assistance provision\n"
+            "- Preserve all legal rights and remedies\n"
+        )
+    elif task.clause_type == "data_protection":
+        user_msg += (
+            "- Require execution of a Data Processing Agreement (DPA)\n"
+            "- Add 72-hour data breach notification requirement\n"
+            "- Require prior written consent for sub-processors\n"
+            "- Mandate assistance with data subject access requests\n"
+            "- Require deletion or return of personal data upon termination\n"
+            "- Include data minimisation principles\n"
+            "- Restrict data transfers to adequate jurisdictions\n"
+        )
     user_msg += "\nReturn ONLY the rewritten clause text, nothing else."
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -229,6 +262,11 @@ def _build_rewrite_prompt(
 
 
 _VALID_ACTIONS = {"FLAG_RISK", "EDIT_CLAUSE", "ACCEPT", "REJECT", "PROPOSE_COUNTER"}
+
+# Optimal action sequences per intent level for rule-based fallback
+_STRATEGY_HIGH = ["FLAG_RISK", "EDIT_CLAUSE", "EDIT_CLAUSE", "PROPOSE_COUNTER", "REJECT", "EDIT_CLAUSE", "ACCEPT"]
+_STRATEGY_MODERATE = ["FLAG_RISK", "PROPOSE_COUNTER", "EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
+_STRATEGY_LOW = ["EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
 
 
 def _choose(
@@ -240,7 +278,7 @@ def _choose(
     """LLM-driven action selection with rule-based fallback."""
     contract_text = state_data["contract_text"]
     history = state_data.get("negotiation_history", [])
-    history_summary = "\n".join(history[-6:]) if history else ""
+    history_summary = "\n".join(history[-8:]) if history else ""
 
     # ── 1. Ask the LLM for structured analysis ──────────────────────────
     parsed: Optional[dict] = None
@@ -263,15 +301,15 @@ def _choose(
         content = parsed.get("rewritten_clause") or None
         risk_assessment = parsed.get("risk_assessment", "")
 
-    # ── 3. Rule-based fallback ────────────────────────────────────────────
+    # ── 3. Rule-based fallback with improved strategy ─────────────────────
     if action_type is None:
         intent = _rule_based_intent(task, contract_text)
         if intent == "HIGH":
-            seq = ["FLAG_RISK", "EDIT_CLAUSE", "PROPOSE_COUNTER", "REJECT", "ACCEPT"]
+            seq = _STRATEGY_HIGH
         elif intent == "MODERATE":
-            seq = ["FLAG_RISK", "PROPOSE_COUNTER", "EDIT_CLAUSE", "ACCEPT"]
+            seq = _STRATEGY_MODERATE
         else:
-            seq = ["EDIT_CLAUSE", "ACCEPT"]
+            seq = _STRATEGY_LOW
         action_type = seq[min(step, len(seq) - 1)]
 
     # ── 4. Adaptive: switch to EDIT if previous score was poor ───────────
@@ -279,13 +317,22 @@ def _choose(
         if action_type in ("FLAG_RISK", "REJECT"):
             action_type = "EDIT_CLAUSE"
 
+    # ── 4b. Adaptive: if scores are improving and risk resolved, accept ──
+    if (
+        len(prev_rewards) >= 3
+        and all(r > 0.45 for r in prev_rewards[-2:])
+        and not effective_risk_high(task, contract_text)
+        and not trap_unresolved(task, contract_text)
+    ):
+        action_type = "ACCEPT"
+
     # ── 5. Generate content for EDIT / PROPOSE if missing ────────────────
     if action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER") and not content:
         try:
             msgs = _build_rewrite_prompt(
                 task, contract_text, risk_assessment or "High legal risk identified"
             )
-            content = _llm_chat(msgs, max_tokens=400)
+            content = _llm_chat(msgs, max_tokens=600)
             if content.startswith('"') and content.endswith('"'):
                 content = content[1:-1]
         except Exception as exc:
@@ -300,8 +347,11 @@ def _choose(
 
 
 # ── EPISODE EXECUTION ────────────────────────────────────────────────────
-def run_episode(env: ContractEnv) -> None:
-    """Run one full episode using env.reset() → loop env.step() → log."""
+def run_episode(env: ContractEnv) -> float:
+    """Run one full episode using env.reset() → loop env.step() → log.
+
+    Returns the mean episode score.
+    """
     obs_obj = env.reset()
     task = env.current_task
 
@@ -362,6 +412,8 @@ def run_episode(env: ContractEnv) -> None:
             flush=True,
         )
 
+    return score
+
 
 # ── MAIN ─────────────────────────────────────────────────────────────────
 def main() -> None:
@@ -374,13 +426,13 @@ def main() -> None:
     parser.add_argument(
         "--episodes",
         type=int,
-        default=5,
-        help="Number of episodes to run (default: 5)",
+        default=8,
+        help="Number of episodes to run (default: 8 — one per task)",
     )
     parser.add_argument(
         "--benchmark",
         action="store_true",
-        help="Run exactly one episode per task (covers all 5 tasks)",
+        help="Run exactly one episode per task (covers all 8 tasks)",
     )
     args = parser.parse_args()
 
@@ -389,8 +441,16 @@ def main() -> None:
 
     episodes_to_run = len(TASKS) if args.benchmark else args.episodes
 
+    total_score = 0.0
     for _ in range(episodes_to_run):
-        run_episode(env)
+        total_score += run_episode(env)
+
+    mean_score = total_score / max(episodes_to_run, 1)
+    print(
+        f"\n[SUMMARY] episodes={episodes_to_run} mean_score={mean_score:.3f} "
+        f"threshold={SUCCESS_SCORE_THRESHOLD}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

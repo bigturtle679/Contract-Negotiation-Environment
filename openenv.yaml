@@ -16,6 +16,12 @@ tasks:
     grader: contract_env.env.graders:grade_easy_plus
   - id: hard_intellectual_property
     grader: contract_env.env.graders:grade_hard_plus
+  - id: medium_confidentiality_nda
+    grader: contract_env.env.graders:grade_medium_plus
+  - id: hard_termination_convenience
+    grader: contract_env.env.graders:grade_hard_plus2
+  - id: expert_data_protection
+    grader: contract_env.env.graders:grade_expert
 
 observation_space:
   fields:

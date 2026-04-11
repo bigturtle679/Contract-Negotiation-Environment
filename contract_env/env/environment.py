@@ -23,6 +23,7 @@ class ContractEnv:
         self.current_step: int = 0
         self.done: bool = False
         self.state_data: dict[str, Any] = {}
+        self._rng = random.Random(42)
 
     @property
     def tasks(self) -> list[str]:
@@ -33,6 +34,19 @@ class ContractEnv:
     def graders(self) -> dict:
         from contract_env.env.graders import TASK_GRADERS
         return TASK_GRADERS
+
+    def _opponent_reply(self, action_type: str) -> Optional[str]:
+        """Generate an opponent response based on the action taken.
+
+        If the current task defines opponent_responses for this action_type,
+        pick one at random. Otherwise return None.
+        """
+        if self.current_task is None:
+            return None
+        responses = self.current_task.opponent_responses.get(action_type, [])
+        if not responses:
+            return None
+        return self._rng.choice(responses)
 
     def reset(self) -> Observation:
         self.done = False
@@ -122,6 +136,12 @@ class ContractEnv:
             f"content_len={len((action.content or '').strip())}"
         )
         self.state_data["negotiation_history"].append(entry)
+
+        # Opponent simulation: add a counterparty reply to the history
+        opp_reply = self._opponent_reply(action.action_type)
+        if opp_reply:
+            self.state_data["negotiation_history"].append(f"opponent|{opp_reply}")
+            info["opponent_reply"] = opp_reply
 
         if action.action_type == "EDIT_CLAUSE":
             self.state_data["contract_text"] = (action.content or "").strip()

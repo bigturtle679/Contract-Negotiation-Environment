@@ -101,8 +101,9 @@ def trap_unresolved(task: NegotiationTask, contract_text: str) -> bool:
 
 
 def effective_risk_high(task: NegotiationTask, contract_text: str) -> bool:
-    # Any task that defines explicit trap markers is still "effectively high
-    # risk" as long as any trap marker remains in the text.
+    # Any task that defines explicit trap markers (HARD, HARD_PLUS, HARD_PLUS2,
+    # EXPERT, MEDIUM_PLUS) is still "effectively high risk" as long as any trap
+    # marker remains in the text.
     if task.trap_markers and trap_unresolved(task, contract_text):
         return True
 

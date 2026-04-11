@@ -154,7 +154,7 @@ def _parse_llm_json(text: str) -> Optional[dict]:
 def _risk_score(task: NegotiationTask, contract_text: str) -> float:
     hits = keyword_match_score(contract_text, task.risk_keywords)
     rs = min(1.0, hits * task.clause_type_weight / 1.15)
-    if task.name in ("HARD", "HARD_PLUS", "HARD_PLUS2", "EXPERT") and trap_unresolved(task, contract_text):
+    if task.trap_markers and trap_unresolved(task, contract_text):
         rs = min(1.0, rs + 0.25)
     return round(rs, 6)
 

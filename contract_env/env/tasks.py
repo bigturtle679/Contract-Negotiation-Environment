@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List, Literal
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, get_args
 
 from pydantic import BaseModel, Field, field_validator
+
+from contract_env.env.models import ActionType  # single source of truth
 
 if TYPE_CHECKING:
     from contract_env.env.models import Reward
@@ -21,9 +23,8 @@ ClauseType = Literal[
     "data_protection",
 ]
 
-_VALID_ACTION_TYPES = frozenset(
-    {"FLAG_RISK", "EDIT_CLAUSE", "ACCEPT", "REJECT", "PROPOSE_COUNTER"}
-)
+# Derive valid action type strings from the canonical Literal in models.py
+_VALID_ACTION_TYPES: frozenset[str] = frozenset(get_args(ActionType))
 
 
 class NegotiationTask(BaseModel):

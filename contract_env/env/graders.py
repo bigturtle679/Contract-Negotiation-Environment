@@ -182,25 +182,65 @@ def grade_action(
     return reward
 
 
-# Specific graders for each task
+# ============ TASK-SPECIFIC GRADERS ============
+# Each grader applies difficulty-specific adjustments on top of the base evaluation.
+
+
 def grade_easy(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
-    return grade_action(task, contract_before, action, proposed_contract_text)
+    """Grade easy tasks with a bias toward accepting safe-looking clauses quickly."""
+    reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
+    # Easy tasks reward quick risk identification + simple fixes more generously
+    if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER"):
+        safe = _safe_overlap(
+            (action.content or "").strip(), task.safe_keywords, task.expected_safe_edit
+        )
+        if safe > 0.5:
+            reward.score = max(0.001, min(0.999, reward.score * 1.08))
+    return reward
 
 
 def grade_medium(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
-    return grade_action(task, contract_before, action, proposed_contract_text)
+    """Grade medium tasks, penalising premature acceptance of risky auto-renewal terms."""
+    reward, info = evaluate_action(task, contract_before, action, proposed_contract_text)
+    # Medium tasks penalise accepting without editing more strictly
+    if action.action_type == "ACCEPT":
+        risk = _weighted_risk_hits(proposed_contract_text, task.risk_keywords)
+        if risk >= 0.3:
+            reward.score = max(0.001, min(0.999, reward.score * 0.65))
+    return reward
 
 
 def grade_hard(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
-    return grade_action(task, contract_before, action, proposed_contract_text)
+    """Grade hard tasks with trap-resolution checking and heavier penalty for missed traps."""
+    reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
+    # Hard tasks require trap resolution – heavy penalty if traps remain
+    if action.action_type in ("ACCEPT", "EDIT_CLAUSE", "PROPOSE_COUNTER"):
+        if trap_unresolved(task, proposed_contract_text):
+            reward.score = max(0.001, min(0.999, reward.score * 0.5))
+    return reward
 
 
 def grade_easy_plus(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
-    return grade_action(task, contract_before, action, proposed_contract_text)
+    """Grade easy-plus compliance tasks, rewarding mention of notification obligations."""
+    reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
+    content = (action.content or "").strip().lower()
+    # Bonus for mentioning breach-notification language in compliance edits
+    if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER"):
+        if any(kw in content for kw in ("notify", "notification", "promptly inform")):
+            reward.score = max(0.001, min(0.999, reward.score * 1.06))
+    return reward
 
 
 def grade_hard_plus(task: NegotiationTask, contract_before: str, action: Action, proposed_contract_text: str) -> Reward:
-    return grade_action(task, contract_before, action, proposed_contract_text)
+    """Grade hard-plus IP tasks with trap-resolution + ownership-clarity checks."""
+    reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
+    content = (action.content or "").strip().lower()
+    # Penalise if IP traps remain, reward clear ownership language
+    if trap_unresolved(task, proposed_contract_text):
+        reward.score = max(0.001, min(0.999, reward.score * 0.55))
+    if any(kw in content for kw in ("customer owns", "customer-owned", "owned by customer")):
+        reward.score = max(0.001, min(0.999, reward.score * 1.07))
+    return reward
 
 
 # ============ GRADER REGISTRY ============

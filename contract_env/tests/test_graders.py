@@ -7,6 +7,11 @@ from contract_env.env.graders import (
     effective_risk_high,
     evaluate_action,
     grade_action,
+    grade_easy,
+    grade_medium,
+    grade_hard,
+    grade_easy_plus,
+    grade_hard_plus,
     token_overlap_ratio,
 )
 from contract_env.env.models import Action
@@ -58,6 +63,50 @@ class TestGraders(unittest.TestCase):
         self.assertFalse(
             effective_risk_high(task, task.expected_safe_edit),
         )
+
+    # ── Differentiated grader tests ─────────────────────────────────────
+    def test_grade_easy_rewards_safe_edit(self) -> None:
+        task = next(t for t in TASKS if t.name == "EASY")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_easy(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_medium_penalises_premature_accept(self) -> None:
+        task = next(t for t in TASKS if t.name == "MEDIUM")
+        r = grade_medium(task, task.contract_text, Action(action_type="ACCEPT"), task.contract_text)
+        self.assertLessEqual(r.score, 0.01)
+
+    def test_grade_hard_penalises_unresolved_trap(self) -> None:
+        task = next(t for t in TASKS if t.name == "HARD")
+        # Accepting original text with traps should score low
+        action = Action(action_type="EDIT_CLAUSE", content=task.contract_text)
+        r = grade_hard(task, task.contract_text, action, task.contract_text)
+        r_safe = grade_hard(task, task.contract_text,
+                            Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                            task.expected_safe_edit)
+        self.assertGreater(r_safe.score, r.score)
+
+    def test_grade_easy_plus_bounds(self) -> None:
+        task = next(t for t in TASKS if t.name == "EASY_PLUS")
+        a = Action(action_type="FLAG_RISK", content="note")
+        r = grade_easy_plus(task, task.contract_text, a, task.contract_text)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_hard_plus_penalises_unresolved_trap(self) -> None:
+        task = next(t for t in TASKS if t.name == "HARD_PLUS")
+        # Edit that keeps trap markers should score lower than safe edit
+        action = Action(action_type="EDIT_CLAUSE", content=task.contract_text)
+        r_trap = grade_hard_plus(task, task.contract_text, action, task.contract_text)
+        r_safe = grade_hard_plus(task, task.contract_text,
+                                 Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                                 task.expected_safe_edit)
+        self.assertGreater(r_safe.score, r_trap.score)
+
+    def test_all_tasks_have_graders(self) -> None:
+        for task in TASKS:
+            self.assertTrue(task.has_grader(), f"Task {task.id} missing grader")
 
 
 if __name__ == "__main__":

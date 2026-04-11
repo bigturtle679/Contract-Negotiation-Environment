@@ -11,13 +11,19 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from contract_env.env.environment import ContractEnv
+from contract_env.env.graders import TASK_GRADERS, NUM_GRADED_TASKS
 from contract_env.env.models import Action, StepRequest
+from contract_env.env.tasks import TASKS
 
 _env = ContractEnv()
 
 app = FastAPI(
     title="Contract Negotiation OpenEnv",
-    version="1.1.0",
+    description=(
+        "AI-driven environment for evaluating contract-negotiation agents. "
+        "Agents analyse clauses, identify risks, and propose safer alternatives."
+    ),
+    version="1.2.0",
 )
 
 app.add_middleware(
@@ -29,13 +35,13 @@ app.add_middleware(
 )
 
 
-# ---------------- ROOT ----------------
+# ── ROOT ────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"status": "ok", "service": "contract-negotiation-env"}
 
 
-# ---------------- ERROR HANDLERS ----------------
+# ── ERROR HANDLERS ──────────────────────────────────────────────────────
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -60,43 +66,59 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ---------------- HEALTH ----------------
+# ── HEALTH ──────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-# ---------------- STATE ----------------
+# ── TASKS LISTING ───────────────────────────────────────────────────────
+@app.get("/tasks")
+def list_tasks():
+    """Return metadata for every registered task."""
+    return {
+        "total": len(TASKS),
+        "graded": NUM_GRADED_TASKS,
+        "tasks": [
+            {
+                "id": t.id,
+                "name": t.name,
+                "clause_type": t.clause_type,
+                "risk_level": t.risk_level,
+                "industry_context": t.industry_context,
+                "has_grader": t.id in TASK_GRADERS,
+            }
+            for t in TASKS
+        ],
+    }
+
+
+# ── STATE ───────────────────────────────────────────────────────────────
 @app.get("/state")
 def get_state():
     return _env.state()
 
 
-# ---------------- RESET (FIXED) ----------------
+# ── RESET ───────────────────────────────────────────────────────────────
 @app.post("/reset")
 def reset():
     try:
         obs = _env.reset()
-
-        return {
-            "observation": obs.model_dump()
-        }
-
+        return {"observation": obs.model_dump()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------- STEP (FIXED) ----------------
+# ── STEP ────────────────────────────────────────────────────────────────
 @app.post("/step")
 def step(req: StepRequest):
     try:
         action = Action(action_type=req.action_type, content=req.content)
-
         obs, reward, done, info = _env.step(action)
 
         return {
             "observation": obs.model_dump(),
-            "reward": {"score": reward},  # CRITICAL FIX
+            "reward": {"score": reward},
             "done": done,
             "info": info,
         }
@@ -105,7 +127,7 @@ def step(req: StepRequest):
         raise HTTPException(status_code=422, detail=e.errors())
 
 
-# ---------------- MAIN ----------------
+# ── MAIN ────────────────────────────────────────────────────────────────
 def main():
     import uvicorn
 

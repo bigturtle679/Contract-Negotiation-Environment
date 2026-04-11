@@ -11,8 +11,6 @@ from contract_env.env.graders import (
 from contract_env.env.models import Action, Observation
 from contract_env.env.tasks import TASKS, NegotiationTask
 
-random.seed(42)
-
 
 class ContractEnv:
     """Multi-turn contract-negotiation environment.

@@ -209,7 +209,7 @@ An episode is considered successful if `score ≥ 0.50`.
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest contract_env/tests/ -v   # 51 tests
+python -m pytest contract_env/tests/ -v   # 59 tests
 ```
 
 ### Run the server
@@ -224,6 +224,9 @@ uvicorn contract_env.server.app:app --host 0.0.0.0 --port 7860
 export HF_TOKEN="your-huggingface-token"
 python inference.py --benchmark    # one episode per task (8 total)
 python inference.py --episodes 3   # run 3 episodes cycling through tasks
+
+# Retry any task that scores below 0.4:
+python inference.py --benchmark --retry-low 0.4
 
 # Against the Docker API server (for competition evaluation):
 python inference.py --benchmark --mode api
@@ -254,6 +257,7 @@ python inference.py --benchmark --mode api
 | `BENCHMARK` | No | `contract_negotiation` | Benchmark name in [START] log line |
 | `ENV_SERVER_URL` | No | `http://localhost:7860` | Docker server URL (for `--mode api`) |
 | `PORT` | No | `7860` | Server port |
+| `CORS_ORIGINS` | No | `*` | Comma-separated allowed CORS origins |
 
 ---
 

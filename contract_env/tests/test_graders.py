@@ -248,5 +248,55 @@ class TestGraders(unittest.TestCase):
         self.assertTrue(info.get("accept_blocked"))
 
 
+    def test_empty_risk_keywords_handled(self) -> None:
+        """Tasks with empty risk_keywords should not crash scoring."""
+        from contract_env.env.graders import keyword_match_score
+        score = keyword_match_score("any text here", [])
+        self.assertEqual(score, 0.0)
+
+    def test_unicode_in_contract_text(self) -> None:
+        """Non-ASCII contract text should be scored without errors."""
+        task = TASKS[0]
+        action = Action(
+            action_type="EDIT_CLAUSE",
+            content="Haftungsbeschränkung: Begrenzung auf gezahlte Gebühren der letzten 12 Monate.",
+        )
+        r = grade_action(task, task.contract_text, action, action.content)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_opponent_response_key_validation(self) -> None:
+        """Invalid action type keys in opponent_responses should be rejected."""
+        from contract_env.env.tasks import NegotiationTask
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            NegotiationTask(
+                id="test",
+                name="TEST",
+                contract_text="test",
+                clause_type="liability",
+                risk_keywords=["test"],
+                safe_keywords=["test"],
+                expected_safe_edit="test",
+                risk_level="HIGH",
+                hidden_trap="",
+                opponent_responses={"INVALID_ACTION": ["reply"]},
+                grader_func=grade_easy,
+                grader_name="grade_easy",
+            )
+
+    def test_evaluate_quality_endpoint_max_length(self) -> None:
+        """API should reject excessively long contract_text."""
+        from fastapi.testclient import TestClient
+        from contract_env.server.app import app, _env
+        client = TestClient(app)
+        _env.reset()
+        r = client.post(
+            "/evaluate-quality",
+            json={"contract_text": "x" * 100_001},
+        )
+        self.assertEqual(r.status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()

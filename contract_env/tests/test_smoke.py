@@ -161,5 +161,53 @@ class TestContractEnv(unittest.TestCase):
         self.assertEqual(_concession_summary({}), "")
 
 
+    def test_content_length_validation(self) -> None:
+        """Oversized content should be rejected gracefully."""
+        env = ContractEnv()
+        env.reset()
+        huge_content = "x" * (env.max_content_length + 1)
+        obs, r, done, info = env.step(
+            Action(action_type="EDIT_CLAUSE", content=huge_content)
+        )
+        self.assertEqual(r, 0.001)
+        self.assertIn("error", info)
+        self.assertIn("exceeds maximum length", info["error"])
+
+    def test_episode_runs_to_max_steps(self) -> None:
+        """Episode should terminate at max_steps if agent never accepts."""
+        env = ContractEnv()
+        env.reset()
+        for i in range(env.max_steps):
+            obs, r, done, info = env.step(
+                Action(action_type="FLAG_RISK", content="risk")
+            )
+            if i < env.max_steps - 1:
+                self.assertFalse(done)
+        self.assertTrue(done)
+        self.assertEqual(info.get("termination_reason"), "max_steps_reached")
+
+    def test_step_after_done_returns_error(self) -> None:
+        """Stepping after episode is done should return an error."""
+        env = ContractEnv()
+        env.reset()
+        env.step(Action(action_type="ACCEPT"))
+        obs, r, done, info = env.step(Action(action_type="FLAG_RISK", content="test"))
+        self.assertTrue(done)
+        self.assertEqual(info.get("error"), "already_done")
+
+    def test_unicode_content_handled(self) -> None:
+        """Non-ASCII characters should not crash the environment."""
+        env = ContractEnv()
+        env.reset()
+        obs, r, done, info = env.step(
+            Action(
+                action_type="EDIT_CLAUSE",
+                content="Les parties s'engagent à limiter la responsabilité — §12 Haftung"
+            )
+        )
+        self.assertGreater(r, 0.0)
+        self.assertLess(r, 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

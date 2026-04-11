@@ -138,6 +138,9 @@ def get_schema():
     }
 
 
+_MAX_EVALUATE_TEXT_LEN = 100_000
+
+
 # ── EVALUATE QUALITY ─────────────────────────────────────────────────────
 @app.post("/evaluate-quality")
 def evaluate_quality(body: dict):
@@ -152,6 +155,11 @@ def evaluate_quality(body: dict):
     contract_text = body.get("contract_text", "")
     if not contract_text:
         raise HTTPException(status_code=422, detail="contract_text must be non-empty.")
+    if len(contract_text) > _MAX_EVALUATE_TEXT_LEN:
+        raise HTTPException(
+            status_code=422,
+            detail=f"contract_text exceeds maximum length of {_MAX_EVALUATE_TEXT_LEN}.",
+        )
     quality = contract_quality_score(_env.current_task, contract_text)
     return {"quality_score": round(quality, 4), "risk_score": round(1.0 - quality, 4)}
 

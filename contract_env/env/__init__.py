@@ -25,7 +25,6 @@ from contract_env.env.tasks import (
     validate_all_tasks_have_graders,
     GRADED_TASK_IDS,
     GRADED_TASK_NAMES,
-    NUM_GRADED_TASKS as TASKS_NUM_GRADED,
 )
 
 __all__ = [

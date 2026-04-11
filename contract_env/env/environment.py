@@ -16,6 +16,7 @@ random.seed(42)
 
 class ContractEnv:
     max_steps: int = 7
+    max_content_length: int = 50_000  # guard against oversized action content
 
     def __init__(self) -> None:
         self._reset_count: int = 0
@@ -92,6 +93,10 @@ class ContractEnv:
         if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER"):
             if not c:
                 return "EDIT_CLAUSE and PROPOSE_COUNTER require non-empty content"
+            if len(c) > self.max_content_length:
+                return (
+                    f"content exceeds maximum length of {self.max_content_length} characters"
+                )
 
         return None
 

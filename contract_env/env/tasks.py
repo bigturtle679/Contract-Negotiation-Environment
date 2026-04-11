@@ -1,23 +1,42 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List
+from typing import TYPE_CHECKING, Any, Callable, List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
     from contract_env.env.models import Reward
     from contract_env.env.models import Action
 
+# Allowed values – kept in sync with openenv.yaml / models.py
+RiskLevel = Literal["HIGH", "MODERATE", "LOW"]
+ClauseType = Literal[
+    "liability",
+    "term_renewal",
+    "performance_changes",
+    "compliance",
+    "intellectual_property",
+    "confidentiality",
+    "termination",
+    "data_protection",
+]
+
+_VALID_ACTION_TYPES = frozenset(
+    {"FLAG_RISK", "EDIT_CLAUSE", "ACCEPT", "REJECT", "PROPOSE_COUNTER"}
+)
+
 
 class NegotiationTask(BaseModel):
+    """A single contract-negotiation task with clause text, metadata, and grading info."""
+
     id: str
     name: str
     contract_text: str
-    clause_type: str
-    risk_keywords: List[str]  # ✅ FIXED (was tuple before)
+    clause_type: ClauseType
+    risk_keywords: List[str]
     safe_keywords: List[str]
     expected_safe_edit: str
-    risk_level: str
+    risk_level: RiskLevel
     hidden_trap: str
     trap_markers: List[str] = Field(
         default_factory=list,
@@ -42,6 +61,18 @@ class NegotiationTask(BaseModel):
     grader_func: Any = Field(exclude=True)
     grader: str = Field(default="")
     grader_name: str
+
+    @field_validator("opponent_responses")
+    @classmethod
+    def _validate_opponent_response_keys(
+        cls, v: dict[str, List[str]]
+    ) -> dict[str, List[str]]:
+        bad = set(v.keys()) - _VALID_ACTION_TYPES
+        if bad:
+            raise ValueError(
+                f"opponent_responses contains invalid action types: {bad}"
+            )
+        return v
 
     def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:
         """Return the grader function assigned to this task."""
@@ -596,7 +627,6 @@ def validate_all_tasks_have_graders() -> bool:
             return False
     return True
 
-# Metadata - just count tasks with grader field set
+# Metadata — derived from TASKS (single source of truth for task-side counts)
 GRADED_TASK_IDS = [task.id for task in TASKS if task.has_grader()]
 GRADED_TASK_NAMES = [task.name for task in TASKS if task.has_grader()]
-NUM_GRADED_TASKS = len(GRADED_TASK_IDS)

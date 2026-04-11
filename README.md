@@ -251,7 +251,7 @@ python inference.py --benchmark --mode api
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `HF_TOKEN` | Yes | — | HuggingFace / LLM API key |
+| `HF_TOKEN` | Yes | — | HuggingFace / LLM API key (falls back to `API_KEY` if unset) |
 | `API_BASE_URL` | No | `https://router.huggingface.co/v1` | LLM API endpoint |
 | `MODEL_NAME` | No | `Qwen/Qwen2.5-72B-Instruct` | Model identifier |
 | `BENCHMARK` | No | `contract_negotiation` | Benchmark name in [START] log line |

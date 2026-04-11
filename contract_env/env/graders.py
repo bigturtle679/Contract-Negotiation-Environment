@@ -67,8 +67,8 @@ def _is_negated(text_lower: str, keyword_lower: str) -> bool:
         if pos == -1:
             break
         found_any = True
-        # Check the 60-character window before the match for negation cues
-        window_start = max(0, pos - 60)
+        # Check the 150-character window before the match for negation cues
+        window_start = max(0, pos - 150)
         preceding = text_lower[window_start:pos]
         if not any(neg in preceding for neg in _NEGATION_PREFIXES):
             all_negated = False

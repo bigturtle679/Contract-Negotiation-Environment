@@ -41,7 +41,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,8 +124,9 @@ def reset(body: Optional[ResetRequest] = None):
         return {"observation": obs.model_dump()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error during /reset")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── STEP ────────────────────────────────────────────────────────────────

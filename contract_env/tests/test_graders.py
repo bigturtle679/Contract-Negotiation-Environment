@@ -297,6 +297,67 @@ class TestGraders(unittest.TestCase):
         )
         self.assertEqual(r.status_code, 422)
 
+    def test_accept_not_blocked_after_safe_edit(self) -> None:
+        """ACCEPT should NOT be blocked when the contract has been rewritten to the safe edit."""
+        for task in TASKS:
+            r, info = evaluate_action(
+                task, task.expected_safe_edit,
+                Action(action_type="ACCEPT"), task.expected_safe_edit,
+            )
+            self.assertFalse(
+                info.get("accept_blocked", False),
+                f"Task {task.id}: ACCEPT blocked on expected_safe_edit text",
+            )
+            self.assertGreater(
+                r.score, 0.01,
+                f"Task {task.id}: ACCEPT reward too low after safe edit",
+            )
+
+    def test_negation_aware_keyword_matching(self) -> None:
+        """Risk keywords in negation context should not count as risk hits."""
+        from contract_env.env.graders import _weighted_risk_hits, _is_negated
+        # "no consequential damages" — negated
+        self.assertTrue(_is_negated(
+            "no party is liable for consequential damages", "consequential"
+        ))
+        # "consequential damages apply" — NOT negated
+        self.assertFalse(_is_negated(
+            "consequential damages apply to all claims", "consequential"
+        ))
+        # Risk hits should be 0 when negated
+        self.assertEqual(
+            _weighted_risk_hits(
+                "no party is liable for consequential or punitive damages",
+                ["consequential", "punitive"],
+            ),
+            0.0,
+        )
+        # Risk hits should be >0 when NOT negated
+        self.assertGreater(
+            _weighted_risk_hits(
+                "vendor has consequential and punitive liability",
+                ["consequential", "punitive"],
+            ),
+            0.0,
+        )
+
+    def test_safe_edits_not_flagged_as_high_risk(self) -> None:
+        """All expected_safe_edits should NOT be classified as effectively high risk."""
+        for task in TASKS:
+            self.assertFalse(
+                effective_risk_high(task, task.expected_safe_edit),
+                f"Task {task.id}: expected_safe_edit incorrectly flagged as high risk",
+            )
+
+    def test_original_contracts_flagged_as_high_risk(self) -> None:
+        """All original contract texts with HIGH risk_level should be effectively high risk."""
+        for task in TASKS:
+            if task.risk_level == "HIGH":
+                self.assertTrue(
+                    effective_risk_high(task, task.contract_text),
+                    f"Task {task.id}: original contract not flagged as high risk",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

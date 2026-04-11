@@ -208,6 +208,36 @@ class TestContractEnv(unittest.TestCase):
         self.assertGreater(r, 0.0)
         self.assertLess(r, 1.0)
 
+    def test_reset_with_task_id(self) -> None:
+        """reset(task_id=...) should force a specific task."""
+        env = ContractEnv()
+        obs = env.reset(task_id="expert_data_protection")
+        self.assertEqual(env.current_task.id, "expert_data_protection")
+        self.assertIn("data", obs.clause_type)
+
+    def test_reset_with_invalid_task_id(self) -> None:
+        """reset(task_id=...) with an unknown ID should raise ValueError."""
+        env = ContractEnv()
+        with self.assertRaises(ValueError):
+            env.reset(task_id="nonexistent_task")
+
+    def test_edit_then_accept_full_flow(self) -> None:
+        """Full flow: EDIT_CLAUSE with safe edit, then ACCEPT should not be blocked."""
+        env = ContractEnv()
+        env.reset()
+        task = env.current_task
+        # Step 1: submit the safe edit
+        obs, r1, done1, info1 = env.step(
+            Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        )
+        self.assertFalse(done1)
+        self.assertGreater(r1, 0.1)
+        # Step 2: accept the edited contract
+        obs, r2, done2, info2 = env.step(Action(action_type="ACCEPT"))
+        self.assertTrue(done2)
+        self.assertFalse(info2.get("accept_blocked", False))
+        self.assertGreater(r2, 0.01)
+
 
 if __name__ == "__main__":
     unittest.main()

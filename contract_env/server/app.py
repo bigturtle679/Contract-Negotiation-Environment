@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import traceback
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -61,7 +60,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={
             "detail": str(exc),
-            "trace": traceback.format_exc(),
         },
     )
 

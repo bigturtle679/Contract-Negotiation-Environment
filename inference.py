@@ -506,6 +506,15 @@ class _HTTPEnvClient:
         self._task_idx = 0
         self.current_task: Optional[NegotiationTask] = None
 
+    def close(self) -> None:
+        self._session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self.close()
+
     def reset(self):
         resp = self._session.post(f"{self.base_url}/reset")
         resp.raise_for_status()
@@ -551,12 +560,19 @@ class _DictObservation:
 
 
 # ── EPISODE EXECUTION ────────────────────────────────────────────────────
-def run_episode(env) -> tuple[float, str]:
+def run_episode(env, task_id: Optional[str] = None) -> tuple[float, str]:
     """Run one full episode using env.reset() → loop env.step() → log.
+
+    Args:
+        env: Environment instance (ContractEnv or _HTTPEnvClient).
+        task_id: If given, reset to this specific task (local mode only).
 
     Returns (mean_episode_score, task_id).
     """
-    obs_obj = env.reset()
+    if task_id is not None and hasattr(env, "reset") and "task_id" in env.reset.__code__.co_varnames:
+        obs_obj = env.reset(task_id=task_id)
+    else:
+        obs_obj = env.reset()
     task = env.current_task
 
     state_data: dict[str, Any] = {
@@ -691,7 +707,7 @@ def main() -> None:
                 flush=True,
             )
             for tid in low_tasks:
-                ep_score, _ = run_episode(env)
+                ep_score, _ = run_episode(env, task_id=tid)
                 total_score += ep_score
                 task_scores[tid].append(ep_score)
                 episodes_to_run += 1

@@ -44,6 +44,36 @@ def _cosine_similarity(a: str, b: str) -> float:
     return dot / (mag_a * mag_b)
 
 
+# Negation prefixes that invert the meaning of a risk keyword.
+# E.g. "no consequential damages" is safe, not risky.
+_NEGATION_PREFIXES = (
+    "no ", "not ", "neither ", "without any ", "exclud", "except for ",
+    "not liable for ", "no party is liable for ", "shall not include ",
+    "does not cover ", "not responsible for ",
+)
+
+
+def _is_negated(text_lower: str, keyword_lower: str) -> bool:
+    """Return True if *every* occurrence of keyword_lower in text_lower is preceded
+    by a negation phrase, meaning the keyword appears only in a 'safe' context."""
+    idx = 0
+    all_negated = True
+    found_any = False
+    while True:
+        pos = text_lower.find(keyword_lower, idx)
+        if pos == -1:
+            break
+        found_any = True
+        # Check the 60-character window before the match for negation cues
+        window_start = max(0, pos - 60)
+        preceding = text_lower[window_start:pos]
+        if not any(neg in preceding for neg in _NEGATION_PREFIXES):
+            all_negated = False
+            break
+        idx = pos + len(keyword_lower)
+    return found_any and all_negated
+
+
 def _weighted_risk_hits(text: str, risk_keywords: list[str]) -> float:
     low = text.lower()
     if not risk_keywords:
@@ -51,7 +81,8 @@ def _weighted_risk_hits(text: str, risk_keywords: list[str]) -> float:
 
     hits = 0
     for phrase in risk_keywords:
-        if phrase.lower() in low:
+        kw = phrase.lower()
+        if kw in low and not _is_negated(low, kw):
             hits += 1
 
     return min(1.0, hits / max(len(risk_keywords), 1))

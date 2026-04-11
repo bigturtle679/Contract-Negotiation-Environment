@@ -49,14 +49,21 @@ class ContractEnv:
             return None
         return self._rng.choice(responses)
 
-    def reset(self) -> Observation:
+    def reset(self, task_id: Optional[str] = None) -> Observation:
         self.done = False
         self.current_step = 0
 
-        idx = self._reset_count % len(TASKS)
+        if task_id is not None:
+            # Reset to a specific task (used by retry logic)
+            match = next((t for t in TASKS if t.id == task_id), None)
+            if match is None:
+                raise ValueError(f"Unknown task_id: {task_id!r}")
+            self.current_task = match
+        else:
+            idx = self._reset_count % len(TASKS)
+            self.current_task = TASKS[idx]
         self._reset_count += 1
 
-        self.current_task = TASKS[idx]
         assert self.current_task is not None
 
         t = self.current_task

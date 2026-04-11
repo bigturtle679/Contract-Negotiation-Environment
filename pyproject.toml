@@ -27,3 +27,10 @@ server = "contract_env.server.app:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["contract_env*"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # FastAPI internally passes 'deprecated' as an extra keyword to pydantic Field().
+    # This is a known issue between FastAPI and Pydantic v2 — not our code.
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+]

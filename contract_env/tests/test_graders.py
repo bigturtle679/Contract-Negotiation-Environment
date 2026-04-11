@@ -12,6 +12,11 @@ from contract_env.env.graders import (
     grade_hard,
     grade_easy_plus,
     grade_hard_plus,
+    grade_medium_plus,
+    grade_hard_plus2,
+    grade_expert,
+    clause_completeness_score,
+    semantic_similarity,
     token_overlap_ratio,
 )
 from contract_env.env.models import Action
@@ -64,6 +69,27 @@ class TestGraders(unittest.TestCase):
             effective_risk_high(task, task.expected_safe_edit),
         )
 
+    def test_effective_high_covers_hard_plus2(self) -> None:
+        """HARD_PLUS2 tasks with unresolved trap markers should be effectively high risk."""
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        self.assertTrue(len(task.trap_markers) > 0, "HARD_PLUS2 must have trap markers")
+        self.assertTrue(effective_risk_high(task, task.contract_text))
+        self.assertFalse(effective_risk_high(task, task.expected_safe_edit))
+
+    def test_effective_high_covers_expert(self) -> None:
+        """EXPERT tasks with unresolved trap markers should be effectively high risk."""
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        self.assertTrue(len(task.trap_markers) > 0, "EXPERT must have trap markers")
+        self.assertTrue(effective_risk_high(task, task.contract_text))
+        self.assertFalse(effective_risk_high(task, task.expected_safe_edit))
+
+    def test_effective_high_covers_medium_plus(self) -> None:
+        """MEDIUM_PLUS tasks with unresolved trap markers should be effectively high risk."""
+        task = next(t for t in TASKS if t.name == "MEDIUM_PLUS")
+        self.assertTrue(len(task.trap_markers) > 0, "MEDIUM_PLUS must have trap markers")
+        self.assertTrue(effective_risk_high(task, task.contract_text))
+        self.assertFalse(effective_risk_high(task, task.expected_safe_edit))
+
     # ── Differentiated grader tests ─────────────────────────────────────
     def test_grade_easy_rewards_safe_edit(self) -> None:
         task = next(t for t in TASKS if t.name == "EASY")
@@ -107,6 +133,230 @@ class TestGraders(unittest.TestCase):
     def test_all_tasks_have_graders(self) -> None:
         for task in TASKS:
             self.assertTrue(task.has_grader(), f"Task {task.id} missing grader")
+
+    # ── NEW: Tests for new graders ──────────────────────────────────────
+    def test_grade_medium_plus_rewards_scoped_nda(self) -> None:
+        task = next(t for t in TASKS if t.name == "MEDIUM_PLUS")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_medium_plus(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_medium_plus_penalises_overbroad_accept(self) -> None:
+        task = next(t for t in TASKS if t.name == "MEDIUM_PLUS")
+        r = grade_medium_plus(task, task.contract_text,
+                              Action(action_type="ACCEPT"), task.contract_text)
+        # Accepting overbroad NDA should be penalised
+        r_edit = grade_medium_plus(task, task.contract_text,
+                                   Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                                   task.expected_safe_edit)
+        self.assertGreater(r_edit.score, r.score)
+
+    def test_grade_hard_plus2_rewards_cure_period(self) -> None:
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_hard_plus2(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_hard_plus2_penalises_unresolved(self) -> None:
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        action = Action(action_type="EDIT_CLAUSE", content=task.contract_text)
+        r_bad = grade_hard_plus2(task, task.contract_text, action, task.contract_text)
+        r_good = grade_hard_plus2(task, task.contract_text,
+                                  Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                                  task.expected_safe_edit)
+        self.assertGreater(r_good.score, r_bad.score)
+
+    def test_grade_expert_rewards_gdpr_language(self) -> None:
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        r = grade_expert(task, task.contract_text, action, task.expected_safe_edit)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_grade_expert_penalises_unresolved_data_traps(self) -> None:
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        action = Action(action_type="EDIT_CLAUSE", content=task.contract_text)
+        r_bad = grade_expert(task, task.contract_text, action, task.contract_text)
+        r_good = grade_expert(task, task.contract_text,
+                              Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit),
+                              task.expected_safe_edit)
+        self.assertGreater(r_good.score, r_bad.score)
+
+    # ── NEW: Tests for enhanced scoring metrics ─────────────────────────
+    def test_clause_completeness_score_full(self) -> None:
+        score = clause_completeness_score("capped at twelve months, no consequential or punitive",
+                                          ["capped", "twelve", "consequential", "punitive"])
+        self.assertEqual(score, 1.0)
+
+    def test_clause_completeness_score_partial(self) -> None:
+        score = clause_completeness_score("capped at twelve months",
+                                          ["capped", "twelve", "consequential", "punitive"])
+        self.assertEqual(score, 0.5)
+
+    def test_clause_completeness_score_empty_requirements(self) -> None:
+        score = clause_completeness_score("any text", [])
+        self.assertEqual(score, 1.0)
+
+    def test_semantic_similarity_identical(self) -> None:
+        sim = semantic_similarity("hello world test", "hello world test")
+        self.assertAlmostEqual(sim, 1.0, places=2)
+
+    def test_semantic_similarity_different(self) -> None:
+        sim = semantic_similarity("hello world test", "completely unrelated xyz")
+        self.assertLess(sim, 0.5)
+
+    def test_evaluate_action_returns_new_grade_fields(self) -> None:
+        """Verify evaluate_action returns semantic_similarity and completeness in grade info."""
+        task = TASKS[0]
+        action = Action(action_type="EDIT_CLAUSE", content=task.expected_safe_edit)
+        _, info = evaluate_action(task, task.contract_text, action, task.expected_safe_edit)
+        grade = info["grade"]
+        self.assertIn("semantic_similarity", grade)
+        self.assertIn("completeness", grade)
+
+    def test_eight_graded_tasks(self) -> None:
+        """Ensure we have at least 8 graded tasks."""
+        graded = [t for t in TASKS if t.has_grader()]
+        self.assertGreaterEqual(len(graded), 8)
+
+    def test_observation_risk_float_trap_bonus_all_tasks(self) -> None:
+        """All tasks with trap_markers should get a risk boost in observation_risk_float."""
+        from contract_env.env.graders import observation_risk_float
+        for task in TASKS:
+            if task.trap_markers:
+                risk_with_trap = observation_risk_float(task, task.contract_text)
+                # Contract text with trap markers should have elevated risk
+                self.assertGreater(risk_with_trap, 0.1,
+                                   f"Task {task.id} trap-bearing text should have elevated risk")
+
+    def test_accept_blocked_on_expert_unresolved(self) -> None:
+        """Accepting EXPERT task with unresolved traps should be blocked."""
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        r, info = evaluate_action(task, task.contract_text,
+                                  Action(action_type="ACCEPT"), task.contract_text)
+        self.assertEqual(r.score, 0.001)
+        self.assertTrue(info.get("accept_blocked"))
+
+    def test_accept_blocked_on_hard_plus2_unresolved(self) -> None:
+        """Accepting HARD_PLUS2 task with unresolved traps should be blocked."""
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        r, info = evaluate_action(task, task.contract_text,
+                                  Action(action_type="ACCEPT"), task.contract_text)
+        self.assertEqual(r.score, 0.001)
+        self.assertTrue(info.get("accept_blocked"))
+
+
+    def test_empty_risk_keywords_handled(self) -> None:
+        """Tasks with empty risk_keywords should not crash scoring."""
+        from contract_env.env.graders import keyword_match_score
+        score = keyword_match_score("any text here", [])
+        self.assertEqual(score, 0.0)
+
+    def test_unicode_in_contract_text(self) -> None:
+        """Non-ASCII contract text should be scored without errors."""
+        task = TASKS[0]
+        action = Action(
+            action_type="EDIT_CLAUSE",
+            content="Haftungsbeschränkung: Begrenzung auf gezahlte Gebühren der letzten 12 Monate.",
+        )
+        r = grade_action(task, task.contract_text, action, action.content)
+        self.assertGreater(r.score, 0.0)
+        self.assertLess(r.score, 1.0)
+
+    def test_opponent_response_key_validation(self) -> None:
+        """Invalid action type keys in opponent_responses should be rejected."""
+        from contract_env.env.tasks import NegotiationTask
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            NegotiationTask(
+                id="test",
+                name="TEST",
+                contract_text="test",
+                clause_type="liability",
+                risk_keywords=["test"],
+                safe_keywords=["test"],
+                expected_safe_edit="test",
+                risk_level="HIGH",
+                hidden_trap="",
+                opponent_responses={"INVALID_ACTION": ["reply"]},
+                grader_func=grade_easy,
+                grader_name="grade_easy",
+            )
+
+    def test_evaluate_quality_endpoint_max_length(self) -> None:
+        """API should reject excessively long contract_text."""
+        from fastapi.testclient import TestClient
+        from contract_env.server.app import app, _env
+        client = TestClient(app)
+        _env.reset()
+        r = client.post(
+            "/evaluate-quality",
+            json={"contract_text": "x" * 100_001},
+        )
+        self.assertEqual(r.status_code, 422)
+
+    def test_accept_not_blocked_after_safe_edit(self) -> None:
+        """ACCEPT should NOT be blocked when the contract has been rewritten to the safe edit."""
+        for task in TASKS:
+            r, info = evaluate_action(
+                task, task.expected_safe_edit,
+                Action(action_type="ACCEPT"), task.expected_safe_edit,
+            )
+            self.assertFalse(
+                info.get("accept_blocked", False),
+                f"Task {task.id}: ACCEPT blocked on expected_safe_edit text",
+            )
+            self.assertGreater(
+                r.score, 0.01,
+                f"Task {task.id}: ACCEPT reward too low after safe edit",
+            )
+
+    def test_negation_aware_keyword_matching(self) -> None:
+        """Risk keywords in negation context should not count as risk hits."""
+        from contract_env.env.graders import _weighted_risk_hits, _is_negated
+        # "no consequential damages" — negated
+        self.assertTrue(_is_negated(
+            "no party is liable for consequential damages", "consequential"
+        ))
+        # "consequential damages apply" — NOT negated
+        self.assertFalse(_is_negated(
+            "consequential damages apply to all claims", "consequential"
+        ))
+        # Risk hits should be 0 when negated
+        self.assertEqual(
+            _weighted_risk_hits(
+                "no party is liable for consequential or punitive damages",
+                ["consequential", "punitive"],
+            ),
+            0.0,
+        )
+        # Risk hits should be >0 when NOT negated
+        self.assertGreater(
+            _weighted_risk_hits(
+                "vendor has consequential and punitive liability",
+                ["consequential", "punitive"],
+            ),
+            0.0,
+        )
+
+    def test_safe_edits_not_flagged_as_high_risk(self) -> None:
+        """All expected_safe_edits should NOT be classified as effectively high risk."""
+        for task in TASKS:
+            self.assertFalse(
+                effective_risk_high(task, task.expected_safe_edit),
+                f"Task {task.id}: expected_safe_edit incorrectly flagged as high risk",
+            )
+
+    def test_original_contracts_flagged_as_high_risk(self) -> None:
+        """All original contract texts with HIGH risk_level should be effectively high risk."""
+        for task in TASKS:
+            if task.risk_level == "HIGH":
+                self.assertTrue(
+                    effective_risk_high(task, task.contract_text),
+                    f"Task {task.id}: original contract not flagged as high risk",
+                )
 
 
 if __name__ == "__main__":

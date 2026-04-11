@@ -15,7 +15,22 @@ random.seed(42)
 
 
 class ContractEnv:
+    """Multi-turn contract-negotiation environment.
+
+    Cycles through a list of :class:`NegotiationTask` objects, presenting
+    agents with contract clauses to analyse and improve.  Each episode
+    consists of up to ``max_steps`` actions, and the agent receives a
+    reward after every ``step()``.
+
+    Usage::
+
+        env = ContractEnv()
+        obs = env.reset()
+        obs, reward, done, info = env.step(Action(action_type="FLAG_RISK"))
+    """
+
     max_steps: int = 7
+    max_content_length: int = 50_000  # guard against oversized action content
 
     def __init__(self) -> None:
         self._reset_count: int = 0
@@ -23,10 +38,11 @@ class ContractEnv:
         self.current_step: int = 0
         self.done: bool = False
         self.state_data: dict[str, Any] = {}
+        self._rng = random.Random(42)
 
     @property
     def tasks(self) -> list[str]:
-        from contract_env.env.tasks import TASKS
+        """Return IDs of all registered negotiation tasks."""
         return [task.id for task in TASKS]
 
     @property
@@ -34,15 +50,49 @@ class ContractEnv:
         from contract_env.env.graders import TASK_GRADERS
         return TASK_GRADERS
 
-    def reset(self) -> Observation:
+    def _opponent_reply(self, action_type: str) -> Optional[str]:
+        """Generate an opponent response based on the action taken.
+
+        If the current task defines opponent_responses for this action_type,
+        pick one at random. Otherwise return None.
+        """
+        if self.current_task is None:
+            return None
+        responses = self.current_task.opponent_responses.get(action_type, [])
+        if not responses:
+            return None
+        return self._rng.choice(responses)
+
+    def reset(self, task_id: Optional[str] = None) -> Observation:
+        """Begin a new episode, optionally targeting a specific task.
+
+        Args:
+            task_id: If given, reset to the task with this ID instead of
+                cycling through the task list sequentially.
+
+        Returns:
+            Initial observation for the episode.
+
+        Raises:
+            ValueError: If *task_id* is not ``None`` and no matching task exists.
+            RuntimeError: If no task could be selected (should never happen).
+        """
         self.done = False
         self.current_step = 0
 
-        idx = self._reset_count % len(TASKS)
+        if task_id is not None:
+            # Reset to a specific task (used by retry logic)
+            match = next((t for t in TASKS if t.id == task_id), None)
+            if match is None:
+                raise ValueError(f"Unknown task_id: {task_id!r}")
+            self.current_task = match
+        else:
+            idx = self._reset_count % len(TASKS)
+            self.current_task = TASKS[idx]
         self._reset_count += 1
 
-        self.current_task = TASKS[idx]
-        assert self.current_task is not None
+        if self.current_task is None:  # pragma: no cover — defensive guard
+            raise RuntimeError("No task selected after reset")
 
         t = self.current_task
 
@@ -61,7 +111,8 @@ class ContractEnv:
         return self._make_observation()
 
     def _make_observation(self) -> Observation:
-        assert self.current_task is not None
+        if self.current_task is None:  # pragma: no cover — defensive guard
+            raise RuntimeError("Cannot make observation: no active task. Call reset() first.")
         ct = self.state_data["contract_text"]
 
         return Observation(
@@ -78,11 +129,27 @@ class ContractEnv:
         if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER"):
             if not c:
                 return "EDIT_CLAUSE and PROPOSE_COUNTER require non-empty content"
+            if len(c) > self.max_content_length:
+                return (
+                    f"content exceeds maximum length of {self.max_content_length} characters"
+                )
 
         return None
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, dict[str, Any]]:
-        assert self.current_task is not None
+        """Execute one negotiation action and return (observation, reward, done, info).
+
+        Args:
+            action: The agent's chosen action (action_type + optional content).
+
+        Returns:
+            A 4-tuple of (observation, reward, done, info).
+
+        Raises:
+            RuntimeError: If called before ``reset()``.
+        """
+        if self.current_task is None:
+            raise RuntimeError("Cannot step: no active task. Call reset() first.")
 
         info: dict[str, Any] = {}
 
@@ -123,6 +190,12 @@ class ContractEnv:
         )
         self.state_data["negotiation_history"].append(entry)
 
+        # Opponent simulation: add a counterparty reply to the history
+        opp_reply = self._opponent_reply(action.action_type)
+        if opp_reply:
+            self.state_data["negotiation_history"].append(f"opponent|{opp_reply}")
+            info["opponent_reply"] = opp_reply
+
         if action.action_type == "EDIT_CLAUSE":
             self.state_data["contract_text"] = (action.content or "").strip()
 
@@ -141,6 +214,7 @@ class ContractEnv:
         return self._make_observation(), reward, self.done, info
 
     def state(self) -> dict[str, Any]:
+        """Return a serialisable snapshot of the current environment state."""
         out = dict(self.state_data)
 
         if self.current_task is not None:
@@ -153,4 +227,5 @@ class ContractEnv:
         return out
 
     def close(self) -> None:
+        """Clean up resources (no-op for this environment)."""
         return None

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import random
 import re
@@ -33,6 +34,8 @@ from contract_env.env.models import Action
 from contract_env.env.tasks import TASKS, NegotiationTask
 
 warnings.filterwarnings("ignore")
+
+log = logging.getLogger(__name__)
 
 # ── ENV CONFIG ──────────────────────────────────────────────────────────
 API_BASE_URL = os.environ.get(
@@ -97,9 +100,10 @@ def _llm_chat(messages: list[dict], temperature: float = 0.15,
                 max_tokens=max_tokens,
             )
             return (resp.choices[0].message.content or "").strip()
-        except Exception:
+        except Exception as exc:
             if attempt == _MAX_RETRIES:
                 raise
+            log.warning("LLM call attempt %d failed: %s", attempt + 1, exc)
     return ""
 
 
@@ -195,7 +199,8 @@ def _choose(task: NegotiationTask, state_data: dict, step: int,
                                           history_summary)
         raw = _llm_chat(messages)
         parsed = _parse_llm_json(raw)
-    except Exception:
+    except Exception as exc:
+        log.warning("LLM analysis call failed: %s", exc)
         parsed = None
 
     # ── 2. Extract action + content from the LLM response ──────────────
@@ -237,7 +242,8 @@ def _choose(task: NegotiationTask, state_data: dict, step: int,
             # Strip any quotes the model might wrap around
             if content.startswith('"') and content.endswith('"'):
                 content = content[1:-1]
-        except Exception:
+        except Exception as exc:
+            log.warning("LLM rewrite call failed: %s", exc)
             content = None
 
     # ── 6. Ensure content actions always have content ──────────────────

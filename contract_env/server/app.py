@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -12,6 +14,13 @@ from contract_env.env.environment import ContractEnv
 from contract_env.env.graders import TASK_GRADERS, NUM_GRADED_TASKS, contract_quality_score
 from contract_env.env.models import Action, Observation, Reward, StepRequest
 from contract_env.env.tasks import TASKS
+
+logger = logging.getLogger(__name__)
+
+
+class ResetRequest(BaseModel):
+    """Optional request body for the /reset endpoint."""
+    task_id: Optional[str] = Field(default=None, description="Force a specific task by ID.")
 
 
 class EvaluateQualityRequest(BaseModel):
@@ -61,9 +70,7 @@ async def validation_handler(request: Request, exc: RequestValidationError):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    import logging
-
-    logging.getLogger(__name__).exception("Unhandled error on %s %s", request.method, request.url.path)
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
@@ -105,10 +112,18 @@ def get_state():
 
 # ── RESET ───────────────────────────────────────────────────────────────
 @app.post("/reset")
-def reset():
+def reset(body: Optional[ResetRequest] = None):
+    """Start a new episode.
+
+    Optionally pass ``{"task_id": "..."}`` to target a specific task;
+    otherwise the environment cycles through tasks sequentially.
+    """
     try:
-        obs = _env.reset()
+        task_id = body.task_id if body else None
+        obs = _env.reset(task_id=task_id)
         return {"observation": obs.model_dump()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

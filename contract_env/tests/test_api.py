@@ -99,6 +99,34 @@ class TestAPI(unittest.TestCase):
         r = self.client.post("/step", json={"action_type": "INVALID_ACTION"})
         self.assertEqual(r.status_code, 422)
 
+    def test_reset_with_task_id(self) -> None:
+        """POST /reset with a task_id body should target that specific task."""
+        r = self.client.post("/reset", json={"task_id": "expert_data_protection"})
+        self.assertEqual(r.status_code, 200)
+        obs = r.json()["observation"]
+        self.assertEqual(obs["clause_type"], "data_protection")
+
+    def test_reset_with_invalid_task_id(self) -> None:
+        """POST /reset with an unknown task_id should return 400."""
+        r = self.client.post("/reset", json={"task_id": "nonexistent_task"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_evaluate_quality_before_reset(self) -> None:
+        """POST /evaluate-quality before any /reset should return 400."""
+        # Use a fresh app instance with a fresh env that hasn't been reset
+        from contract_env.server.app import _env
+        # Save and restore state to simulate a fresh start
+        old_task = _env.current_task
+        _env.current_task = None
+        try:
+            r = self.client.post(
+                "/evaluate-quality",
+                json={"contract_text": "Some clause text."},
+            )
+            self.assertEqual(r.status_code, 400)
+        finally:
+            _env.current_task = old_task
+
 
 if __name__ == "__main__":
     unittest.main()

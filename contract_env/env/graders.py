@@ -253,7 +253,7 @@ def evaluate_action(
         + 0.05 * completeness
     )
 
-    # ✅ STRICT RANGE FIX: strictly between 0 and 1, clamped to [0.001, 0.999]
+    # Clamp strictly between 0 and 1 → [0.001, 0.999]
     score = max(0.001, min(0.999, score))
 
     reward = Reward(score=round(score, 4))
@@ -305,7 +305,7 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
     if task.trap_markers and trap_unresolved(task, contract_text):
         base = min(1.0, base + 0.25)
 
-    # ✅ STRICT RANGE FIX: strictly between 0 and 1, clamped to [0.001, 0.999]
+    # Clamp strictly between 0 and 1 → [0.001, 0.999]
     base = min(0.999, max(0.001, base))
     return round(base, 4)
 
@@ -321,6 +321,7 @@ def grade_action(
     action: Action,
     proposed_contract_text: str,
 ) -> Reward:
+    """Convenience wrapper: grade an action and return only the Reward (drop info)."""
     reward, _ = evaluate_action(task, contract_before, action, proposed_contract_text)
     return reward
 

@@ -5,3 +5,7 @@ The canonical implementation lives in ``contract_env.server.app``.
 """
 
 from contract_env.server.app import app  # noqa: F401
+from contract_env.server.app import main  # noqa: F401
+
+if __name__ == "__main__":
+    main()

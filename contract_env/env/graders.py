@@ -184,9 +184,8 @@ def evaluate_action(
     if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER") and content and required_elems:
         completeness = clause_completeness_score(content, required_elems)
 
-    # ---------- FINAL SCORE ----------
-    # Weights: 35% correctness + 25% improvement + 25% risk_alignment
-    #        + 10% semantic similarity + 5% completeness
+    # Weights: 0.35 correctness + 0.25 improvement + 0.25 risk_alignment
+    #        + 0.10 semantic similarity + 0.05 completeness  (total = 1.0)
     score = (
         0.35 * correctness
         + 0.25 * improvement

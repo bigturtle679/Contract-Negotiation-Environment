@@ -427,7 +427,7 @@ def main() -> None:
         "--episodes",
         type=int,
         default=8,
-        help="Number of episodes to run (default: 8 — one per task)",
+        help="Number of episodes to run (default: 8). Tasks cycle sequentially.",
     )
     parser.add_argument(
         "--benchmark",

@@ -55,7 +55,10 @@ _NEGATION_PREFIXES = (
 
 def _is_negated(text_lower: str, keyword_lower: str) -> bool:
     """Return True if *every* occurrence of keyword_lower in text_lower is preceded
-    by a negation phrase, meaning the keyword appears only in a 'safe' context."""
+    by a negation phrase, meaning the keyword appears only in a 'safe' context.
+
+    Returns False if the keyword is not found at all (no occurrence to negate).
+    """
     idx = 0
     all_negated = True
     found_any = False

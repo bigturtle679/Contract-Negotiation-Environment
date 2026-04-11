@@ -78,6 +78,7 @@ def _is_negated(text_lower: str, keyword_lower: str) -> bool:
 
 
 def _weighted_risk_hits(text: str, risk_keywords: list[str]) -> float:
+    """Return the fraction of *risk_keywords* found (un-negated) in *text* ∈ [0, 1]."""
     low = text.lower()
     if not risk_keywords:
         return 0.0
@@ -92,10 +93,12 @@ def _weighted_risk_hits(text: str, risk_keywords: list[str]) -> float:
 
 
 def keyword_match_score(text: str, risk_keywords: list[str]) -> float:
+    """Public alias for :func:`_weighted_risk_hits` — negation-aware risk score."""
     return _weighted_risk_hits(text, risk_keywords)
 
 
 def _safe_overlap(text: str, safe_keywords: list[str], expected_safe: str) -> float:
+    """Score how well *text* overlaps with safe keywords and the expected safe edit ∈ [0, 1]."""
     if not text.strip():
         return 0.0
 
@@ -130,11 +133,18 @@ def semantic_similarity(text: str, reference: str) -> float:
 
 
 def trap_unresolved(task: NegotiationTask, contract_text: str) -> bool:
+    """Return True if any of the task's trap markers still appear in *contract_text*."""
     low = contract_text.lower()
     return any(m in low for m in task.trap_markers)
 
 
 def effective_risk_high(task: NegotiationTask, contract_text: str) -> bool:
+    """Return True if the contract is still effectively high-risk for grading purposes.
+
+    A contract is "effectively high" when:
+    - Any trap marker remains unresolved, **or**
+    - The weighted risk-keyword density exceeds the task's risk-level threshold.
+    """
     # Any task that defines explicit trap markers (HARD, HARD_PLUS, HARD_PLUS2,
     # EXPERT, MEDIUM_PLUS) is still "effectively high risk" as long as any trap
     # marker remains in the text.
@@ -152,6 +162,7 @@ def effective_risk_high(task: NegotiationTask, contract_text: str) -> bool:
 
 
 def action_risk_alignment(action_type: str, effective_high: bool, task: NegotiationTask) -> float:
+    """Score how well the chosen action type matches the current risk level ∈ [0, 1]."""
     clause_boost = task.clause_type_weight
 
     if action_type == "ACCEPT":
@@ -266,13 +277,15 @@ def evaluate_action(
     return reward, info
 
 
-def score_action_hypothetical(task, state_data, action) -> float:
+def score_action_hypothetical(task: NegotiationTask, state_data: dict, action: Action) -> float:
+    """Score an action without stepping the environment (read-only / dry-run)."""
     contract_before = state_data.get("contract_text", "")
     proposed = build_proposed_contract_for_step(contract_before, action)
     return evaluate_action(task, contract_before, action, proposed)[0].score
 
 
 def build_proposed_contract_for_step(contract_before: str, action: Action) -> str:
+    """Build the proposed contract text that would result from applying *action*."""
     content = (action.content or "").strip()
 
     if action.action_type == "EDIT_CLAUSE" and content:
@@ -285,6 +298,7 @@ def build_proposed_contract_for_step(contract_before: str, action: Action) -> st
 
 
 def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
+    """Compute the risk-level float for the observation, clamped to (0, 1)."""
     base = _weighted_risk_hits(contract_text, task.risk_keywords)
 
     # Boost risk observation when any task's trap markers remain unresolved
@@ -297,6 +311,7 @@ def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
 
 
 def contract_quality_score(task: NegotiationTask, contract_text: str) -> float:
+    """Return a quality score for *contract_text* ∈ (0, 1), where 1 = fully safe."""
     return 1.0 - observation_risk_float(task, contract_text)
 
 

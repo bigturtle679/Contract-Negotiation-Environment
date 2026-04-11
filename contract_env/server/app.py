@@ -61,11 +61,12 @@ async def validation_handler(request: Request, exc: RequestValidationError):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    import logging
+
+    logging.getLogger(__name__).exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": str(exc),
-        },
+        content={"detail": "Internal server error"},
     )
 
 

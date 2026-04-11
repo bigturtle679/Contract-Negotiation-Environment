@@ -499,10 +499,13 @@ def _choose(
 class _HTTPEnvClient:
     """Thin HTTP wrapper with the same interface as ContractEnv for inference."""
 
-    def __init__(self, base_url: str) -> None:
+    _DEFAULT_TIMEOUT: float = 30.0  # seconds per HTTP request
+
+    def __init__(self, base_url: str, timeout: float = _DEFAULT_TIMEOUT) -> None:
         import requests
         self.base_url = base_url.rstrip("/")
         self._session = requests.Session()
+        self._timeout = timeout
         self._task_idx = 0
         self.current_task: Optional[NegotiationTask] = None
 
@@ -516,14 +519,14 @@ class _HTTPEnvClient:
         self.close()
 
     def reset(self):
-        resp = self._session.post(f"{self.base_url}/reset")
+        resp = self._session.post(f"{self.base_url}/reset", timeout=self._timeout)
         resp.raise_for_status()
         data = resp.json()
         obs = data["observation"]
         # Map to a NegotiationTask if possible (for _choose() to use)
         task_id = None
         try:
-            state = self._session.get(f"{self.base_url}/state").json()
+            state = self._session.get(f"{self.base_url}/state", timeout=self._timeout).json()
             task_id = state.get("task_id")
         except Exception:
             pass
@@ -538,7 +541,7 @@ class _HTTPEnvClient:
         payload = {"action_type": action.action_type}
         if action.content:
             payload["content"] = action.content
-        resp = self._session.post(f"{self.base_url}/step", json=payload)
+        resp = self._session.post(f"{self.base_url}/step", json=payload, timeout=self._timeout)
         resp.raise_for_status()
         data = resp.json()
         obs = _DictObservation(data["observation"])

@@ -73,6 +73,11 @@ class NegotiationTask(BaseModel):
             raise ValueError(
                 f"opponent_responses contains invalid action types: {bad}"
             )
+        for action_type, responses in v.items():
+            if not responses:
+                raise ValueError(
+                    f"opponent_responses[{action_type!r}] must not be empty"
+                )
         return v
 
     def get_grader(self) -> Callable[["NegotiationTask", str, "Action", str], "Reward"]:

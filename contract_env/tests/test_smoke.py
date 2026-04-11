@@ -238,6 +238,45 @@ class TestContractEnv(unittest.TestCase):
         self.assertFalse(info2.get("accept_blocked", False))
         self.assertGreater(r2, 0.01)
 
+    def test_step_before_reset_raises(self) -> None:
+        """Calling step() without reset() should raise RuntimeError."""
+        env = ContractEnv()
+        with self.assertRaises(RuntimeError):
+            env.step(Action(action_type="FLAG_RISK"))
+
+    def test_step_after_reset_specific_task_keeps_task(self) -> None:
+        """After reset(task_id=...) the task should remain correct through steps."""
+        env = ContractEnv()
+        env.reset(task_id="hard_intellectual_property")
+        self.assertEqual(env.current_task.id, "hard_intellectual_property")
+        obs, _, _, _ = env.step(Action(action_type="FLAG_RISK"))
+        self.assertEqual(env.current_task.id, "hard_intellectual_property")
+        obs, _, _, _ = env.step(
+            Action(action_type="EDIT_CLAUSE", content=env.current_task.expected_safe_edit)
+        )
+        self.assertEqual(env.current_task.id, "hard_intellectual_property")
+
+    def test_opponent_responses_non_empty_validation(self) -> None:
+        """Empty opponent response lists should be rejected by validation."""
+        from contract_env.env.tasks import NegotiationTask
+        from contract_env.env.graders import grade_easy
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            NegotiationTask(
+                id="test",
+                name="TEST",
+                contract_text="test",
+                clause_type="liability",
+                risk_keywords=["test"],
+                safe_keywords=["test"],
+                expected_safe_edit="test",
+                risk_level="HIGH",
+                hidden_trap="",
+                opponent_responses={"FLAG_RISK": []},
+                grader_func=grade_easy,
+                grader_name="grade_easy",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

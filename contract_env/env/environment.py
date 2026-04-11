@@ -154,7 +154,7 @@ class ContractEnv:
         info: dict[str, Any] = {}
 
         if self.done:
-            return self._make_observation(), 0.0, True, {"error": "already_done"}
+            return self._make_observation(), 0.001, True, {"error": "already_done"}
 
         err = self._validate_action(action)
         if err:

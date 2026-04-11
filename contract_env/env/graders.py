@@ -101,10 +101,10 @@ def trap_unresolved(task: NegotiationTask, contract_text: str) -> bool:
 
 
 def effective_risk_high(task: NegotiationTask, contract_text: str) -> bool:
-    # HARD and HARD_PLUS tasks define explicit trap markers; a task is still
-    # "effectively high risk" as long as any trap marker remains in the text.
-    if task.name in ("HARD", "HARD_PLUS"):
-        return trap_unresolved(task, contract_text)
+    # Any task that defines explicit trap markers is still "effectively high
+    # risk" as long as any trap marker remains in the text.
+    if task.trap_markers and trap_unresolved(task, contract_text):
+        return True
 
     hits = _weighted_risk_hits(contract_text, task.risk_keywords)
 
@@ -239,7 +239,8 @@ def build_proposed_contract_for_step(contract_before: str, action: Action) -> st
 def observation_risk_float(task: NegotiationTask, contract_text: str) -> float:
     base = _weighted_risk_hits(contract_text, task.risk_keywords)
 
-    if task.name == "HARD" and trap_unresolved(task, contract_text):
+    # Boost risk observation when any task's trap markers remain unresolved
+    if task.trap_markers and trap_unresolved(task, contract_text):
         base = min(1.0, base + 0.25)
 
     # ✅ STRICT RANGE FIX: strictly between 0 and 1, clamped to [0.001, 0.999]

@@ -13,6 +13,10 @@ STDOUT FORMAT (strictly followed):
     [START] task=<task_id> env=<benchmark> model=<model_name>
     [STEP]  step=<n> action=<action_type> reward=<0.00> done=<true|false> error=<msg|null>
     [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
+
+MODES:
+    --mode local   Use ContractEnv directly (default, for local development).
+    --mode api     Connect to Docker API at ENV_SERVER_URL (for competition evaluation).
 """
 from __future__ import annotations
 
@@ -43,6 +47,7 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 BENCHMARK = os.getenv("BENCHMARK", "contract_negotiation")
+ENV_SERVER_URL = os.getenv("ENV_SERVER_URL", "http://localhost:7860")
 MAX_STEPS = 10
 SUCCESS_SCORE_THRESHOLD = 0.5
 
@@ -268,6 +273,41 @@ _STRATEGY_HIGH = ["FLAG_RISK", "EDIT_CLAUSE", "EDIT_CLAUSE", "PROPOSE_COUNTER", 
 _STRATEGY_MODERATE = ["FLAG_RISK", "PROPOSE_COUNTER", "EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
 _STRATEGY_LOW = ["EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
 
+# ── OPPONENT-RESPONSE PARSING ───────────────────────────────────────────
+# Concession signals from the counterparty that indicate willingness to negotiate
+_CONCESSION_SIGNALS = (
+    "we can accept", "we can agree", "we could consider", "we could accept",
+    "we can consider", "may be possible", "we are willing",
+    "we'll review", "we will review",
+    "agree to", "open to",
+)
+_FIRMNESS_SIGNALS = (
+    "non-negotiable", "cannot proceed", "not possible",
+    "standard and non-negotiable", "cannot accept", "is not included",
+)
+
+
+def _parse_opponent_stance(history: list[str]) -> str:
+    """Analyse the latest opponent reply to determine their negotiation stance.
+
+    Returns:
+        'conceding' — opponent shows willingness; escalate to EDIT_CLAUSE / ACCEPT.
+        'firm' — opponent is holding position; keep pushing with PROPOSE_COUNTER.
+        'neutral' — no strong signal; follow normal strategy.
+    """
+    # Find the most recent opponent entry
+    opp_entries = [h for h in history if h.startswith("opponent|")]
+    if not opp_entries:
+        return "neutral"
+
+    latest = opp_entries[-1].lower()
+
+    if any(signal in latest for signal in _CONCESSION_SIGNALS):
+        return "conceding"
+    if any(signal in latest for signal in _FIRMNESS_SIGNALS):
+        return "firm"
+    return "neutral"
+
 
 def _choose(
     task: NegotiationTask,
@@ -275,10 +315,13 @@ def _choose(
     step: int,
     prev_rewards: list[float],
 ) -> Action:
-    """LLM-driven action selection with rule-based fallback."""
+    """LLM-driven action selection with rule-based fallback and opponent awareness."""
     contract_text = state_data["contract_text"]
     history = state_data.get("negotiation_history", [])
     history_summary = "\n".join(history[-8:]) if history else ""
+
+    # ── 0. Parse opponent stance from negotiation history ────────────────
+    opponent_stance = _parse_opponent_stance(history)
 
     # ── 1. Ask the LLM for structured analysis ──────────────────────────
     parsed: Optional[dict] = None
@@ -317,7 +360,21 @@ def _choose(
         if action_type in ("FLAG_RISK", "REJECT"):
             action_type = "EDIT_CLAUSE"
 
-    # ── 4b. Adaptive: if scores are improving and risk resolved, accept ──
+    # ── 4b. Opponent-aware adjustment ────────────────────────────────────
+    # If opponent is conceding, escalate toward resolution faster.
+    if opponent_stance == "conceding" and step > 0:
+        if action_type == "FLAG_RISK":
+            action_type = "EDIT_CLAUSE"
+        elif action_type == "REJECT":
+            action_type = "PROPOSE_COUNTER"
+    # If opponent is firm, use PROPOSE_COUNTER to keep negotiating.
+    elif opponent_stance == "firm" and step > 0:
+        if action_type in ("ACCEPT",):
+            # Don't accept while opponent is still pushing back on risky terms
+            if effective_risk_high(task, contract_text) or trap_unresolved(task, contract_text):
+                action_type = "PROPOSE_COUNTER"
+
+    # ── 4c. Adaptive: if scores are improving and risk resolved, accept ──
     if (
         len(prev_rewards) >= 3
         and all(r > 0.45 for r in prev_rewards[-2:])
@@ -346,11 +403,69 @@ def _choose(
     return Action(action_type=action_type, content=content)
 
 
+# ── HTTP-CLIENT WRAPPER ──────────────────────────────────────────────────
+# Provides the same reset()/step() interface as ContractEnv but talks to
+# the Docker API server via HTTP, matching the competition evaluation flow.
+
+class _HTTPEnvClient:
+    """Thin HTTP wrapper with the same interface as ContractEnv for inference."""
+
+    def __init__(self, base_url: str) -> None:
+        import requests
+        self.base_url = base_url.rstrip("/")
+        self._session = requests.Session()
+        self._task_idx = 0
+        self.current_task: Optional[NegotiationTask] = None
+
+    def reset(self):
+        resp = self._session.post(f"{self.base_url}/reset")
+        resp.raise_for_status()
+        data = resp.json()
+        obs = data["observation"]
+        # Map to a NegotiationTask if possible (for _choose() to use)
+        task_id = None
+        try:
+            state = self._session.get(f"{self.base_url}/state").json()
+            task_id = state.get("task_id")
+        except Exception:
+            pass
+        if task_id:
+            self.current_task = next((t for t in TASKS if t.id == task_id), None)
+        if self.current_task is None:
+            self.current_task = TASKS[self._task_idx % len(TASKS)]
+            self._task_idx += 1
+        return _DictObservation(obs)
+
+    def step(self, action: Action):
+        payload = {"action_type": action.action_type}
+        if action.content:
+            payload["content"] = action.content
+        resp = self._session.post(f"{self.base_url}/step", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        obs = _DictObservation(data["observation"])
+        reward = data["reward"]["score"]
+        done = data["done"]
+        info = data.get("info", {})
+        return obs, reward, done, info
+
+
+class _DictObservation:
+    """Lightweight wrapper that exposes dict fields as attributes."""
+
+    def __init__(self, d: dict) -> None:
+        self.contract_text: str = d.get("contract_text", "")
+        self.clause_type: str = d.get("clause_type", "")
+        self.risk_level: float = d.get("risk_level", 0.5)
+        self.step_count: int = d.get("step_count", 0)
+        self.negotiation_history: list[str] = d.get("negotiation_history", [])
+
+
 # ── EPISODE EXECUTION ────────────────────────────────────────────────────
-def run_episode(env: ContractEnv) -> float:
+def run_episode(env) -> tuple[float, str]:
     """Run one full episode using env.reset() → loop env.step() → log.
 
-    Returns the mean episode score.
+    Returns (mean_episode_score, task_id).
     """
     obs_obj = env.reset()
     task = env.current_task
@@ -412,7 +527,7 @@ def run_episode(env: ContractEnv) -> float:
             flush=True,
         )
 
-    return score
+    return score, task.id
 
 
 # ── MAIN ─────────────────────────────────────────────────────────────────
@@ -434,18 +549,43 @@ def main() -> None:
         action="store_true",
         help="Run exactly one episode per task (covers all 8 tasks)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["local", "api"],
+        default="local",
+        help=(
+            "Execution mode. 'local' uses ContractEnv directly (default). "
+            "'api' connects to the Docker server via HTTP at ENV_SERVER_URL."
+        ),
+    )
     args = parser.parse_args()
 
-    # Single env instance so reset() cycles through tasks in order
-    env = ContractEnv()
+    # Select environment backend
+    if args.mode == "api":
+        env = _HTTPEnvClient(ENV_SERVER_URL)
+        print(f"[CONFIG] mode=api server={ENV_SERVER_URL}", flush=True)
+    else:
+        env = ContractEnv()
+        print("[CONFIG] mode=local", flush=True)
 
     episodes_to_run = len(TASKS) if args.benchmark else args.episodes
 
     total_score = 0.0
+    task_scores: dict[str, list[float]] = {}
+
     for _ in range(episodes_to_run):
-        total_score += run_episode(env)
+        ep_score, task_id = run_episode(env)
+        total_score += ep_score
+        task_scores.setdefault(task_id, []).append(ep_score)
 
     mean_score = total_score / max(episodes_to_run, 1)
+
+    # Per-task summary
+    print("\n[TASK SCORES]", flush=True)
+    for tid, scores in task_scores.items():
+        avg = sum(scores) / len(scores)
+        print(f"  {tid}: mean={avg:.3f} runs={len(scores)}", flush=True)
+
     print(
         f"\n[SUMMARY] episodes={episodes_to_run} mean_score={mean_score:.3f} "
         f"threshold={SUCCESS_SCORE_THRESHOLD}",

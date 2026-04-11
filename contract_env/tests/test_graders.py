@@ -69,6 +69,27 @@ class TestGraders(unittest.TestCase):
             effective_risk_high(task, task.expected_safe_edit),
         )
 
+    def test_effective_high_covers_hard_plus2(self) -> None:
+        """HARD_PLUS2 tasks with unresolved trap markers should be effectively high risk."""
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        self.assertTrue(len(task.trap_markers) > 0, "HARD_PLUS2 must have trap markers")
+        self.assertTrue(effective_risk_high(task, task.contract_text))
+        self.assertFalse(effective_risk_high(task, task.expected_safe_edit))
+
+    def test_effective_high_covers_expert(self) -> None:
+        """EXPERT tasks with unresolved trap markers should be effectively high risk."""
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        self.assertTrue(len(task.trap_markers) > 0, "EXPERT must have trap markers")
+        self.assertTrue(effective_risk_high(task, task.contract_text))
+        self.assertFalse(effective_risk_high(task, task.expected_safe_edit))
+
+    def test_effective_high_covers_medium_plus(self) -> None:
+        """MEDIUM_PLUS tasks with unresolved trap markers should be effectively high risk."""
+        task = next(t for t in TASKS if t.name == "MEDIUM_PLUS")
+        self.assertTrue(len(task.trap_markers) > 0, "MEDIUM_PLUS must have trap markers")
+        self.assertTrue(effective_risk_high(task, task.contract_text))
+        self.assertFalse(effective_risk_high(task, task.expected_safe_edit))
+
     # ── Differentiated grader tests ─────────────────────────────────────
     def test_grade_easy_rewards_safe_edit(self) -> None:
         task = next(t for t in TASKS if t.name == "EASY")
@@ -199,6 +220,32 @@ class TestGraders(unittest.TestCase):
         """Ensure we have at least 8 graded tasks."""
         graded = [t for t in TASKS if t.has_grader()]
         self.assertGreaterEqual(len(graded), 8)
+
+    def test_observation_risk_float_trap_bonus_all_tasks(self) -> None:
+        """All tasks with trap_markers should get a risk boost in observation_risk_float."""
+        from contract_env.env.graders import observation_risk_float
+        for task in TASKS:
+            if task.trap_markers:
+                risk_with_trap = observation_risk_float(task, task.contract_text)
+                # Contract text with trap markers should have elevated risk
+                self.assertGreater(risk_with_trap, 0.1,
+                                   f"Task {task.id} trap-bearing text should have elevated risk")
+
+    def test_accept_blocked_on_expert_unresolved(self) -> None:
+        """Accepting EXPERT task with unresolved traps should be blocked."""
+        task = next(t for t in TASKS if t.name == "EXPERT")
+        r, info = evaluate_action(task, task.contract_text,
+                                  Action(action_type="ACCEPT"), task.contract_text)
+        self.assertEqual(r.score, 0.001)
+        self.assertTrue(info.get("accept_blocked"))
+
+    def test_accept_blocked_on_hard_plus2_unresolved(self) -> None:
+        """Accepting HARD_PLUS2 task with unresolved traps should be blocked."""
+        task = next(t for t in TASKS if t.name == "HARD_PLUS2")
+        r, info = evaluate_action(task, task.contract_text,
+                                  Action(action_type="ACCEPT"), task.contract_text)
+        self.assertEqual(r.score, 0.001)
+        self.assertTrue(info.get("accept_blocked"))
 
 
 if __name__ == "__main__":

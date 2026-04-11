@@ -224,6 +224,9 @@ uvicorn contract_env.server.app:app --host 0.0.0.0 --port 7860
 export HF_TOKEN="your-huggingface-token"
 python inference.py --benchmark    # one episode per task (8 total)
 python inference.py --episodes 3   # run 3 episodes cycling through tasks
+
+# Against the Docker API server (for competition evaluation):
+python inference.py --benchmark --mode api
 ```
 
 ### Docker
@@ -234,6 +237,9 @@ docker run -p 7860:7860 \
   -e HF_TOKEN=your-token \
   -e MODEL_NAME=Qwen/Qwen2.5-72B-Instruct \
   contract-negotiation-env
+
+# Then run inference against the Docker server:
+python inference.py --benchmark --mode api
 ```
 
 ---
@@ -246,6 +252,7 @@ docker run -p 7860:7860 \
 | `API_BASE_URL` | No | `https://router.huggingface.co/v1` | LLM API endpoint |
 | `MODEL_NAME` | No | `Qwen/Qwen2.5-72B-Instruct` | Model identifier |
 | `BENCHMARK` | No | `contract_negotiation` | Benchmark name in [START] log line |
+| `ENV_SERVER_URL` | No | `http://localhost:7860` | Docker server URL (for `--mode api`) |
 | `PORT` | No | `7860` | Server port |
 
 ---
@@ -262,12 +269,12 @@ contract_env/
 ├── server/
 │   └── app.py           # FastAPI server (port 7860)
 ├── tests/
-│   ├── test_graders.py  # 28 unit tests covering all grader edge cases + new metrics
+│   ├── test_graders.py  # Grader unit tests covering all edge cases + new metrics
 │   ├── test_api.py      # API endpoint tests
-│   └── test_smoke.py    # 12 smoke tests including opponent simulation + new tasks
-└── client.py            # HTTP client helper
-inference.py             # LLM-driven baseline agent with adaptive multi-turn strategy
-openenv.yaml             # OpenEnv manifest (spec_version: 1, 8 graded tasks)
+│   └── test_smoke.py    # Smoke tests including opponent simulation + opponent stance parsing
+└── client.py            # HTTP client helper with from_docker_image() support
+inference.py             # LLM-driven agent with opponent-aware multi-turn strategy + HTTP mode
+openenv.yaml             # OpenEnv manifest (spec_version: 1, 8 graded tasks, action_space)
 Dockerfile               # Python 3.10-slim container, port 7860
 verify_graders.py        # Pre-submission grader validation script
 ```

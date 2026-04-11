@@ -109,6 +109,31 @@ class TestContractEnv(unittest.TestCase):
         )
         self.assertGreater(r, 0.1)
 
+    def test_opponent_stance_parsing(self) -> None:
+        """Opponent concession/firmness signals should be detected correctly."""
+        from inference import _parse_opponent_stance
+
+        # Conceding
+        history_concede = [
+            "opponent|[Counterparty] We can accept a cap but consequential damages must remain."
+        ]
+        self.assertEqual(_parse_opponent_stance(history_concede), "conceding")
+
+        # Firm
+        history_firm = [
+            "opponent|[Counterparty] This is non-negotiable and standard."
+        ]
+        self.assertEqual(_parse_opponent_stance(history_firm), "firm")
+
+        # Neutral
+        history_neutral = [
+            "opponent|[Counterparty] Our legal team considers this standard."
+        ]
+        self.assertEqual(_parse_opponent_stance(history_neutral), "neutral")
+
+        # Empty
+        self.assertEqual(_parse_opponent_stance([]), "neutral")
+
 
 if __name__ == "__main__":
     unittest.main()

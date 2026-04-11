@@ -31,5 +31,19 @@ observation_space:
     - step_count
     - negotiation_history
 
+action_space:
+  type: discrete
+  actions:
+    - name: FLAG_RISK
+      description: Flag a risk without proposing changes. No content required.
+    - name: EDIT_CLAUSE
+      description: Rewrite the clause with safer language. Requires non-empty content.
+    - name: PROPOSE_COUNTER
+      description: Submit a formal counter-proposal. Requires non-empty content.
+    - name: REJECT
+      description: Reject egregiously one-sided terms. No content required.
+    - name: ACCEPT
+      description: Accept clause when all material risks are resolved. No content required.
+
 reward:
   range: [0.001, 0.999]

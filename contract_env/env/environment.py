@@ -15,7 +15,7 @@ random.seed(42)
 
 
 class ContractEnv:
-    max_steps: int = 5
+    max_steps: int = 7
 
     def __init__(self) -> None:
         self._reset_count: int = 0
@@ -131,8 +131,12 @@ class ContractEnv:
 
         self.current_step += 1
 
-        if action.action_type == "ACCEPT" or self.current_step >= self.max_steps:
+        if action.action_type == "ACCEPT":
             self.done = True
+            info["termination_reason"] = "agent_accepted"
+        elif self.current_step >= self.max_steps:
+            self.done = True
+            info["termination_reason"] = "max_steps_reached"
 
         return self._make_observation(), reward, self.done, info
 

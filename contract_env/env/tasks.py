@@ -172,7 +172,7 @@ TASKS: list[NegotiationTask] = [
             "Conflicting obligations hidden behind boilerplate language must be resolved."
         ),
         trap_markers=[
-            "no additional obligations beyond industry practice",
+            "no additional obligations beyond industry norms",
             "unlimited change orders",
         ],
         clause_type_weight=1.15,

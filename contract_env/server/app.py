@@ -11,8 +11,8 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from contract_env.env.environment import ContractEnv
-from contract_env.env.graders import TASK_GRADERS, NUM_GRADED_TASKS
-from contract_env.env.models import Action, StepRequest
+from contract_env.env.graders import TASK_GRADERS, NUM_GRADED_TASKS, contract_quality_score
+from contract_env.env.models import Action, Observation, Reward, StepRequest
 from contract_env.env.tasks import TASKS
 
 _env = ContractEnv()
@@ -125,6 +125,35 @@ def step(req: StepRequest):
 
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
+
+
+# ── SCHEMA ──────────────────────────────────────────────────────────────
+@app.get("/schema")
+def get_schema():
+    """Return JSON Schema for Action, Observation, and Reward models."""
+    return {
+        "Action": Action.model_json_schema(),
+        "Observation": Observation.model_json_schema(),
+        "Reward": Reward.model_json_schema(),
+    }
+
+
+# ── EVALUATE QUALITY ─────────────────────────────────────────────────────
+@app.post("/evaluate-quality")
+def evaluate_quality(body: dict):
+    """Score an arbitrary contract text against the current task.
+
+    Body: {"contract_text": "..."}
+    Returns: {"quality_score": float, "risk_score": float}
+    where quality_score ∈ (0, 1), 1 = fully safe.
+    """
+    if _env.current_task is None:
+        raise HTTPException(status_code=400, detail="No active task. Call /reset first.")
+    contract_text = body.get("contract_text", "")
+    if not contract_text:
+        raise HTTPException(status_code=422, detail="contract_text must be non-empty.")
+    quality = contract_quality_score(_env.current_task, contract_text)
+    return {"quality_score": round(quality, 4), "risk_score": round(1.0 - quality, 4)}
 
 
 # ── MAIN ────────────────────────────────────────────────────────────────

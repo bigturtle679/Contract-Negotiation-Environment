@@ -58,7 +58,9 @@ def trap_unresolved(task: NegotiationTask, contract_text: str) -> bool:
 
 
 def effective_risk_high(task: NegotiationTask, contract_text: str) -> bool:
-    if task.name == "HARD":
+    # HARD and HARD_PLUS tasks define explicit trap markers; a task is still
+    # "effectively high risk" as long as any trap marker remains in the text.
+    if task.name in ("HARD", "HARD_PLUS"):
         return trap_unresolved(task, contract_text)
 
     hits = _weighted_risk_hits(contract_text, task.risk_keywords)
@@ -96,12 +98,24 @@ def evaluate_action(
     content = (action.content or "").strip()
     eval_text = content if content else proposed_contract_text
 
-    correctness_kw = keyword_match_score(eval_text, task.risk_keywords)
-    token_ov = token_overlap_ratio(eval_text, contract_before)
-
-    correctness = min(
-        1.0, 0.65 * correctness_kw + 0.35 * token_ov * task.clause_type_weight
-    )
+    # Correctness: what the agent knows about the risks in the current context.
+    # For FLAG_RISK / REJECT / ACCEPT: reward identifying risk keywords in the text.
+    # For EDIT_CLAUSE / PROPOSE_COUNTER: reward *removing* risk keywords — a good
+    # rewrite eliminates risky language, so fewer keywords = better correctness.
+    if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER") and content:
+        risk_before = _weighted_risk_hits(contract_before, task.risk_keywords)
+        risk_after = _weighted_risk_hits(content, task.risk_keywords)
+        risk_reduction = max(0.0, risk_before - risk_after)          # ∈ [0, 1]
+        token_ov = token_overlap_ratio(content, contract_before)
+        correctness = min(
+            1.0, 0.70 * risk_reduction + 0.30 * token_ov * task.clause_type_weight
+        )
+    else:
+        correctness_kw = keyword_match_score(eval_text, task.risk_keywords)
+        token_ov = token_overlap_ratio(eval_text, contract_before)
+        correctness = min(
+            1.0, 0.65 * correctness_kw + 0.35 * token_ov * task.clause_type_weight
+        )
 
     improvement = _safe_overlap(content, task.safe_keywords, task.expected_safe_edit)
 

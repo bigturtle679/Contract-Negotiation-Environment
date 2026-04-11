@@ -1,9 +1,9 @@
+spec_version: 1
 name: ContractNegotiationEnv
-entry_point: contract_env.env.environment:ContractEnv
-
-action_space:
-  type: discrete
-  values: [FLAG_RISK, EDIT_CLAUSE, ACCEPT, REJECT, PROPOSE_COUNTER]
+type: space
+runtime: fastapi
+app: contract_env.server.app:app
+port: 7860
 
 tasks:
   - id: easy_unlimited_liability
@@ -26,4 +26,4 @@ observation_space:
     - negotiation_history
 
 reward:
-  range: (0.0, 1.0)  # Strictly between 0 and 1, in practice [0.001, 0.999]
+  range: [0.001, 0.999]

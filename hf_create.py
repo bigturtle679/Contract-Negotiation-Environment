@@ -22,7 +22,7 @@ data = json.dumps({
 
 req = urllib.request.Request(url, headers=headers, data=data)
 try:
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         print(resp.read().decode("utf-8"))
 except Exception as e:
     import traceback

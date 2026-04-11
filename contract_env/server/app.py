@@ -143,6 +143,8 @@ def step(req: StepRequest) -> dict[str, Any]:
             "info": info,
         }
 
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors())
     except Exception:

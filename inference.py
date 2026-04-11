@@ -40,6 +40,10 @@ except ImportError:  # pragma: no cover – optional for test environments
     def load_dotenv(*_a: Any, **_kw: Any) -> None:  # type: ignore[misc]
         pass
 
+# Load .env BEFORE reading any environment variables so that .env-only
+# configuration is picked up by the module-level constants below.
+load_dotenv()
+
 from openai import OpenAI
 
 from contract_env.env.environment import ContractEnv
@@ -652,7 +656,6 @@ def run_episode(env, task_id: Optional[str] = None) -> tuple[float, str]:
 
 # ── MAIN ─────────────────────────────────────────────────────────────────
 def main() -> None:
-    load_dotenv()
     random.seed(42)
 
     parser = argparse.ArgumentParser(

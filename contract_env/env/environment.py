@@ -15,6 +15,20 @@ random.seed(42)
 
 
 class ContractEnv:
+    """Multi-turn contract-negotiation environment.
+
+    Cycles through a list of :class:`NegotiationTask` objects, presenting
+    agents with contract clauses to analyse and improve.  Each episode
+    consists of up to ``max_steps`` actions, and the agent receives a
+    reward after every ``step()``.
+
+    Usage::
+
+        env = ContractEnv()
+        obs = env.reset()
+        obs, reward, done, info = env.step(Action(action_type="FLAG_RISK"))
+    """
+
     max_steps: int = 7
     max_content_length: int = 50_000  # guard against oversized action content
 
@@ -28,7 +42,7 @@ class ContractEnv:
 
     @property
     def tasks(self) -> list[str]:
-        from contract_env.env.tasks import TASKS
+        """Return IDs of all registered negotiation tasks."""
         return [task.id for task in TASKS]
 
     @property
@@ -50,6 +64,19 @@ class ContractEnv:
         return self._rng.choice(responses)
 
     def reset(self, task_id: Optional[str] = None) -> Observation:
+        """Begin a new episode, optionally targeting a specific task.
+
+        Args:
+            task_id: If given, reset to the task with this ID instead of
+                cycling through the task list sequentially.
+
+        Returns:
+            Initial observation for the episode.
+
+        Raises:
+            ValueError: If *task_id* is not ``None`` and no matching task exists.
+            RuntimeError: If no task could be selected (should never happen).
+        """
         self.done = False
         self.current_step = 0
 
@@ -64,7 +91,8 @@ class ContractEnv:
             self.current_task = TASKS[idx]
         self._reset_count += 1
 
-        assert self.current_task is not None
+        if self.current_task is None:  # pragma: no cover — defensive guard
+            raise RuntimeError("No task selected after reset")
 
         t = self.current_task
 
@@ -83,7 +111,8 @@ class ContractEnv:
         return self._make_observation()
 
     def _make_observation(self) -> Observation:
-        assert self.current_task is not None
+        if self.current_task is None:  # pragma: no cover — defensive guard
+            raise RuntimeError("Cannot make observation: no active task. Call reset() first.")
         ct = self.state_data["contract_text"]
 
         return Observation(
@@ -108,7 +137,19 @@ class ContractEnv:
         return None
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, dict[str, Any]]:
-        assert self.current_task is not None
+        """Execute one negotiation action and return (observation, reward, done, info).
+
+        Args:
+            action: The agent's chosen action (action_type + optional content).
+
+        Returns:
+            A 4-tuple of (observation, reward, done, info).
+
+        Raises:
+            RuntimeError: If called before ``reset()``.
+        """
+        if self.current_task is None:
+            raise RuntimeError("Cannot step: no active task. Call reset() first.")
 
         info: dict[str, Any] = {}
 
@@ -173,6 +214,7 @@ class ContractEnv:
         return self._make_observation(), reward, self.done, info
 
     def state(self) -> dict[str, Any]:
+        """Return a serialisable snapshot of the current environment state."""
         out = dict(self.state_data)
 
         if self.current_task is not None:
@@ -185,4 +227,5 @@ class ContractEnv:
         return out
 
     def close(self) -> None:
+        """Clean up resources (no-op for this environment)."""
         return None

@@ -325,7 +325,7 @@ TASKS: list[NegotiationTask] = [
         ),
         clause_type="intellectual_property",
         risk_keywords=[
-            "belongs to Supplier",
+            "belongs to supplier",
             "expressly agreed otherwise",
             "created under this agreement",
             "feedback",

@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from contract_env.env.environment import ContractEnv
 from contract_env.env.graders import TASK_GRADERS, NUM_GRADED_TASKS, contract_quality_score
 from contract_env.env.models import Action, Observation, Reward, StepRequest
 from contract_env.env.tasks import TASKS
+
+
+class EvaluateQualityRequest(BaseModel):
+    """Request body for the /evaluate-quality endpoint."""
+    contract_text: str = Field(..., min_length=1, max_length=100_000)
+
 
 _env = ContractEnv()
 
@@ -136,12 +141,10 @@ def get_schema():
     }
 
 
-_MAX_EVALUATE_TEXT_LEN = 100_000
-
 
 # ── EVALUATE QUALITY ─────────────────────────────────────────────────────
 @app.post("/evaluate-quality")
-def evaluate_quality(body: dict):
+def evaluate_quality(body: EvaluateQualityRequest):
     """Score an arbitrary contract text against the current task.
 
     Body: {"contract_text": "..."}
@@ -150,15 +153,7 @@ def evaluate_quality(body: dict):
     """
     if _env.current_task is None:
         raise HTTPException(status_code=400, detail="No active task. Call /reset first.")
-    contract_text = body.get("contract_text", "")
-    if not contract_text:
-        raise HTTPException(status_code=422, detail="contract_text must be non-empty.")
-    if len(contract_text) > _MAX_EVALUATE_TEXT_LEN:
-        raise HTTPException(
-            status_code=422,
-            detail=f"contract_text exceeds maximum length of {_MAX_EVALUATE_TEXT_LEN}.",
-        )
-    quality = contract_quality_score(_env.current_task, contract_text)
+    quality = contract_quality_score(_env.current_task, body.contract_text)
     return {"quality_score": round(quality, 4), "risk_score": round(1.0 - quality, 4)}
 
 

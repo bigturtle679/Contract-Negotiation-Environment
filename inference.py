@@ -569,8 +569,12 @@ def run_episode(env, task_id: Optional[str] = None) -> tuple[float, str]:
 
     Returns (mean_episode_score, task_id).
     """
-    if task_id is not None and hasattr(env, "reset") and "task_id" in env.reset.__code__.co_varnames:
-        obs_obj = env.reset(task_id=task_id)
+    if task_id is not None:
+        try:
+            obs_obj = env.reset(task_id=task_id)
+        except TypeError:
+            # env.reset() doesn't accept task_id (e.g., _HTTPEnvClient)
+            obs_obj = env.reset()
     else:
         obs_obj = env.reset()
     task = env.current_task

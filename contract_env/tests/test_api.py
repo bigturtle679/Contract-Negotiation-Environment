@@ -55,6 +55,50 @@ class TestAPI(unittest.TestCase):
             self.assertIn("clause_type", t)
             self.assertIn("has_grader", t)
 
+    def test_schema_endpoint(self) -> None:
+        r = self.client.get("/schema")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("Action", data)
+        self.assertIn("Observation", data)
+        self.assertIn("Reward", data)
+
+    def test_root_endpoint(self) -> None:
+        r = self.client.get("/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("status"), "ok")
+
+    def test_evaluate_quality_missing_field(self) -> None:
+        """POST /evaluate-quality with empty body should return 422."""
+        self.client.post("/reset")
+        r = self.client.post("/evaluate-quality", json={})
+        self.assertEqual(r.status_code, 422)
+
+    def test_evaluate_quality_empty_text(self) -> None:
+        """POST /evaluate-quality with empty string should return 422."""
+        self.client.post("/reset")
+        r = self.client.post("/evaluate-quality", json={"contract_text": ""})
+        self.assertEqual(r.status_code, 422)
+
+    def test_evaluate_quality_success(self) -> None:
+        """POST /evaluate-quality with valid text should return scores."""
+        self.client.post("/reset")
+        r = self.client.post(
+            "/evaluate-quality",
+            json={"contract_text": "Liability capped at fees paid in preceding twelve months."},
+        )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("quality_score", data)
+        self.assertIn("risk_score", data)
+        self.assertGreater(data["quality_score"], 0.0)
+
+    def test_step_invalid_action_type_rejected(self) -> None:
+        """POST /step with an invalid action_type should return 422."""
+        self.client.post("/reset")
+        r = self.client.post("/step", json={"action_type": "INVALID_ACTION"})
+        self.assertEqual(r.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

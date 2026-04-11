@@ -172,6 +172,19 @@ def evaluate_action(
     action: Action,
     proposed_contract_text: str,
 ) -> Tuple[Reward, dict[str, Any]]:
+    """Score an agent action using a 5-dimensional rubric.
+
+    Dimensions (weights sum to 1.0):
+        - **correctness** (0.35): Risk-keyword identification or removal.
+        - **improvement** (0.25): Overlap with safe keywords / expected safe edit.
+        - **risk_alignment** (0.25): Whether the action type fits the risk level.
+        - **semantic_similarity** (0.10): Cosine + Jaccard similarity to expected safe edit.
+        - **completeness** (0.05): Required legal elements present in the rewrite.
+
+    Returns:
+        (Reward, info_dict) where info_dict contains per-dimension scores and
+        an ``accept_blocked`` flag when ACCEPT is attempted on a still-risky contract.
+    """
 
     content = (action.content or "").strip()
     eval_text = content if content else proposed_contract_text
@@ -463,4 +476,5 @@ GRADED_TASKS = list(TASK_GRADERS.keys())
 # Count of tasks with graders
 NUM_GRADED_TASKS = len(GRADED_TASKS)
 
-assert NUM_GRADED_TASKS >= 3, f"Expected at least 3 graded tasks, got {NUM_GRADED_TASKS}"
+if NUM_GRADED_TASKS < 3:
+    raise ValueError(f"Expected at least 3 graded tasks, got {NUM_GRADED_TASKS}")

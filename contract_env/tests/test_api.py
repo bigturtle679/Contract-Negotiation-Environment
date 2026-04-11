@@ -43,6 +43,18 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("current_step", r.json())
 
+    def test_tasks_endpoint(self) -> None:
+        r = self.client.get("/tasks")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertGreaterEqual(data["total"], 5)
+        self.assertGreaterEqual(data["graded"], 3)
+        self.assertEqual(len(data["tasks"]), data["total"])
+        for t in data["tasks"]:
+            self.assertIn("id", t)
+            self.assertIn("clause_type", t)
+            self.assertIn("has_grader", t)
+
 
 if __name__ == "__main__":
     unittest.main()

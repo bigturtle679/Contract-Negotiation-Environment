@@ -102,11 +102,17 @@ class ContractEnv:
         contract_before = self.state_data["contract_text"]
         proposed = build_proposed_contract_for_step(contract_before, action)
 
-        reward_obj, grade_info = evaluate_action(
-            self.current_task, contract_before, action, proposed
-        )
+        # Use the task-specific grader when available
+        task = self.current_task
+        if task.has_grader():
+            reward_obj = task.grade(contract_before, action, proposed)
+            # Collect grade info from evaluate_action for transparency
+            _, grade_info = evaluate_action(task, contract_before, action, proposed)
+        else:
+            reward_obj, grade_info = evaluate_action(
+                task, contract_before, action, proposed
+            )
 
-        # ✅ FIX: convert Reward → float
         reward = float(reward_obj.score)
 
         info.update(grade_info)

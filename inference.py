@@ -26,7 +26,7 @@ import logging
 import os
 import random
 import re
-from typing import Any, Optional
+from typing import Any, Optional, get_args
 
 try:
     from dotenv import load_dotenv
@@ -40,9 +40,10 @@ from contract_env.env.environment import ContractEnv
 from contract_env.env.graders import (
     effective_risk_high,
     keyword_match_score,
+    observation_risk_float,
     trap_unresolved,
 )
-from contract_env.env.models import Action
+from contract_env.env.models import Action, ActionType
 from contract_env.env.tasks import TASKS, NegotiationTask
 
 log = logging.getLogger(__name__)
@@ -139,7 +140,7 @@ def _llm_chat(
             if attempt == _MAX_RETRIES:
                 raise
             log.warning("[DEBUG] LLM call attempt %d failed: %s", attempt + 1, exc)
-    return ""
+    raise RuntimeError("LLM call failed after all retries")  # unreachable; satisfies type-checker
 
 
 def _parse_llm_json(text: str) -> Optional[dict]:
@@ -273,7 +274,7 @@ def _build_rewrite_prompt(
     ]
 
 
-_VALID_ACTIONS = {"FLAG_RISK", "EDIT_CLAUSE", "ACCEPT", "REJECT", "PROPOSE_COUNTER"}
+_VALID_ACTIONS = set(get_args(ActionType))
 
 # Optimal action sequences per intent level for rule-based fallback.
 # MODERATE tasks front-load PROPOSE_COUNTER since it's the ideal action for
@@ -455,7 +456,6 @@ def _choose(
 
     # ── 4d. Smart ACCEPT gate: only accept when quality actually improved ─
     if action_type == "ACCEPT":
-        from contract_env.env.graders import observation_risk_float
         current_risk = observation_risk_float(task, contract_text)
         original_risk = observation_risk_float(task, task.contract_text)
         # Block acceptance if the contract hasn't improved meaningfully

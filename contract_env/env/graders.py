@@ -239,7 +239,7 @@ def evaluate_action(
     # Completeness bonus: reward rewrites that include required legal elements
     # defined on the task (if any).
     completeness = 0.0
-    required_elems: list[str] = getattr(task, "required_elements", [])
+    required_elems = task.required_elements
     if action.action_type in ("EDIT_CLAUSE", "PROPOSE_COUNTER") and content and required_elems:
         completeness = clause_completeness_score(content, required_elems)
 

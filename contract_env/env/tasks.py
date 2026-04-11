@@ -293,6 +293,10 @@ TASKS: list[NegotiationTask] = [
             "data privacy",
         ],
         safe_keywords=[
+            "notify",
+            "notification",
+            "promptly",
+            "material breach",
             "regulatory",
             "standards",
             "privacy",
@@ -347,7 +351,7 @@ TASKS: list[NegotiationTask] = [
         risk_level="HIGH",
         hidden_trap="",
         trap_markers=[
-            "feedback",
+            "specifications or feedback",
             "customer provides specifications",
         ],
         clause_type_weight=1.25,

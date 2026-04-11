@@ -7,8 +7,7 @@ MANDATORY
     API_BASE_URL     The API endpoint for the LLM.
     MODEL_NAME       The model identifier to use for inference.
     HF_TOKEN         Your Hugging Face / API key.
-    LOCAL_IMAGE_NAME The name of the local Docker image to use for the
-                     environment if you are using from_docker_image() method.
+    ENV_SERVER_URL   URL of the running Docker server (api mode only).
 
 - Defaults are set only for API_BASE_URL and MODEL_NAME
   (and should reflect your active inference setup):
@@ -30,7 +29,6 @@ import argparse
 import json
 import logging
 import os
-import random
 import re
 from typing import Any, Optional, get_args
 
@@ -64,7 +62,6 @@ MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 BENCHMARK = os.getenv("BENCHMARK", "contract_negotiation")
 ENV_SERVER_URL = os.getenv("ENV_SERVER_URL", "http://localhost:7860")
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "contract-negotiation-env")
 MAX_STEPS = 10
 SUCCESS_SCORE_THRESHOLD = 0.5
 HISTORY_WINDOW = 8                      # How many recent history entries to show the LLM
@@ -647,7 +644,7 @@ def run_episode(env, task_id: Optional[str] = None) -> tuple[float, str]:
         rewards_str = ",".join(f"{r:.2f}" for r in rewards)
         print(
             f"[END] success={str(success).lower()} steps={steps_taken} "
-            f"score={score:.3f} rewards={rewards_str}",
+            f"score={score:.2f} rewards={rewards_str}",
             flush=True,
         )
 
@@ -656,8 +653,6 @@ def run_episode(env, task_id: Optional[str] = None) -> tuple[float, str]:
 
 # ── MAIN ─────────────────────────────────────────────────────────────────
 def main() -> None:
-    random.seed(42)
-
     parser = argparse.ArgumentParser(
         description="Run contract-negotiation inference episodes",
     )

@@ -277,13 +277,6 @@ def evaluate_action(
     return reward, info
 
 
-def score_action_hypothetical(task: NegotiationTask, state_data: dict, action: Action) -> float:
-    """Score an action without stepping the environment (read-only / dry-run)."""
-    contract_before = state_data.get("contract_text", "")
-    proposed = build_proposed_contract_for_step(contract_before, action)
-    return evaluate_action(task, contract_before, action, proposed)[0].score
-
-
 def build_proposed_contract_for_step(contract_before: str, action: Action) -> str:
     """Build the proposed contract text that would result from applying *action*."""
     content = (action.content or "").strip()

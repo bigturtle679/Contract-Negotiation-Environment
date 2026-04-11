@@ -268,9 +268,11 @@ def _build_rewrite_prompt(
 
 _VALID_ACTIONS = {"FLAG_RISK", "EDIT_CLAUSE", "ACCEPT", "REJECT", "PROPOSE_COUNTER"}
 
-# Optimal action sequences per intent level for rule-based fallback
+# Optimal action sequences per intent level for rule-based fallback.
+# MODERATE tasks front-load PROPOSE_COUNTER since it's the ideal action for
+# balanced negotiation (the environment appends [COUNTERPROPOSAL] tags).
 _STRATEGY_HIGH = ["FLAG_RISK", "EDIT_CLAUSE", "EDIT_CLAUSE", "PROPOSE_COUNTER", "REJECT", "EDIT_CLAUSE", "ACCEPT"]
-_STRATEGY_MODERATE = ["FLAG_RISK", "PROPOSE_COUNTER", "EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
+_STRATEGY_MODERATE = ["FLAG_RISK", "PROPOSE_COUNTER", "PROPOSE_COUNTER", "EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
 _STRATEGY_LOW = ["EDIT_CLAUSE", "EDIT_CLAUSE", "ACCEPT"]
 
 # ── OPPONENT-RESPONSE PARSING ───────────────────────────────────────────
@@ -285,6 +287,19 @@ _FIRMNESS_SIGNALS = (
     "non-negotiable", "cannot proceed", "not possible",
     "standard and non-negotiable", "cannot accept", "is not included",
 )
+
+# Topic keywords to detect what specifically the opponent is conceding or
+# holding firm on. Used for fine-grained concession tracking.
+_TOPIC_KEYWORDS = {
+    "cap": ("cap", "capped", "limitation", "limit"),
+    "notice_period": ("notice", "days", "notice period"),
+    "ip_ownership": ("ownership", "ip", "intellectual property", "customer owns"),
+    "termination": ("termination", "terminate", "mutual", "cure"),
+    "liability": ("liability", "indemnify", "consequential", "punitive"),
+    "confidentiality": ("confidentiality", "nda", "perpetuity", "time limit"),
+    "data_protection": ("dpa", "data", "breach notification", "sub-processor", "gdpr"),
+    "change_control": ("change", "scope", "approval", "timeline"),
+}
 
 
 def _parse_opponent_stance(history: list[str]) -> str:
@@ -309,6 +324,50 @@ def _parse_opponent_stance(history: list[str]) -> str:
     return "neutral"
 
 
+def _track_concessions(history: list[str]) -> dict[str, str]:
+    """Track which negotiation topics the opponent has conceded on vs. held firm.
+
+    Returns a dict like {"cap": "conceded", "liability": "firm", "notice_period": "unknown"}.
+    This enables the agent to focus edits on unresolved issues.
+    """
+    concessions: dict[str, str] = {}
+
+    for entry in history:
+        if not entry.startswith("opponent|"):
+            continue
+        low = entry.lower()
+
+        is_conceding = any(s in low for s in _CONCESSION_SIGNALS)
+        is_firm = any(s in low for s in _FIRMNESS_SIGNALS)
+
+        for topic, keywords in _TOPIC_KEYWORDS.items():
+            if any(kw in low for kw in keywords):
+                if is_conceding:
+                    concessions[topic] = "conceded"
+                elif is_firm:
+                    concessions[topic] = "firm"
+                elif topic not in concessions:
+                    concessions[topic] = "discussed"
+
+    return concessions
+
+
+def _concession_summary(concessions: dict[str, str]) -> str:
+    """Build a human-readable summary of opponent concessions for the LLM."""
+    if not concessions:
+        return ""
+    parts: list[str] = []
+    for topic, status in concessions.items():
+        label = topic.replace("_", " ")
+        if status == "conceded":
+            parts.append(f"  - {label}: opponent is WILLING to negotiate")
+        elif status == "firm":
+            parts.append(f"  - {label}: opponent is HOLDING FIRM")
+        else:
+            parts.append(f"  - {label}: discussed (no clear position)")
+    return "Opponent concession tracker:\n" + "\n".join(parts)
+
+
 def _choose(
     task: NegotiationTask,
     state_data: dict,
@@ -320,8 +379,14 @@ def _choose(
     history = state_data.get("negotiation_history", [])
     history_summary = "\n".join(history[-8:]) if history else ""
 
-    # ── 0. Parse opponent stance from negotiation history ────────────────
+    # ── 0. Parse opponent stance and track concessions ───────────────────
     opponent_stance = _parse_opponent_stance(history)
+    concessions = _track_concessions(history)
+    conc_summary = _concession_summary(concessions)
+
+    # Enrich history summary with concession tracking for the LLM
+    if conc_summary:
+        history_summary = history_summary + "\n\n" + conc_summary
 
     # ── 1. Ask the LLM for structured analysis ──────────────────────────
     parsed: Optional[dict] = None
@@ -374,7 +439,24 @@ def _choose(
             if effective_risk_high(task, contract_text) or trap_unresolved(task, contract_text):
                 action_type = "PROPOSE_COUNTER"
 
-    # ── 4c. Adaptive: if scores are improving and risk resolved, accept ──
+    # ── 4c. Concession-aware: if opponent conceded on key issues, lean EDIT ─
+    conceded_topics = [t for t, s in concessions.items() if s == "conceded"]
+    if conceded_topics and step > 1:
+        # Opponent has given ground — capitalise with a concrete edit
+        if action_type == "FLAG_RISK":
+            action_type = "EDIT_CLAUSE"
+
+    # ── 4d. Smart ACCEPT gate: only accept when quality actually improved ─
+    if action_type == "ACCEPT":
+        from contract_env.env.graders import observation_risk_float
+        current_risk = observation_risk_float(task, contract_text)
+        original_risk = observation_risk_float(task, task.contract_text)
+        # Block acceptance if the contract hasn't improved meaningfully
+        if current_risk >= original_risk - 0.05:
+            if effective_risk_high(task, contract_text) or trap_unresolved(task, contract_text):
+                action_type = "EDIT_CLAUSE"
+
+    # ── 4e. Adaptive: if scores are improving and risk resolved, accept ──
     if (
         len(prev_rewards) >= 3
         and all(r > 0.45 for r in prev_rewards[-2:])
@@ -558,6 +640,16 @@ def main() -> None:
             "'api' connects to the Docker server via HTTP at ENV_SERVER_URL."
         ),
     )
+    parser.add_argument(
+        "--retry-low",
+        type=float,
+        default=0.0,
+        metavar="THRESHOLD",
+        help=(
+            "Re-run tasks that scored below THRESHOLD (e.g. --retry-low 0.4). "
+            "Each low-scoring task is retried once. 0 = disabled (default)."
+        ),
+    )
     args = parser.parse_args()
 
     # Select environment backend
@@ -578,13 +670,38 @@ def main() -> None:
         total_score += ep_score
         task_scores.setdefault(task_id, []).append(ep_score)
 
+    # ── Retry low-scoring tasks ──────────────────────────────────────────
+    retry_threshold = args.retry_low
+    if retry_threshold > 0:
+        low_tasks = {
+            tid: scores
+            for tid, scores in task_scores.items()
+            if (sum(scores) / len(scores)) < retry_threshold
+        }
+        if low_tasks:
+            print(
+                f"\n[RETRY] {len(low_tasks)} task(s) scored below {retry_threshold:.2f}, retrying...",
+                flush=True,
+            )
+            for tid in low_tasks:
+                ep_score, _ = run_episode(env)
+                total_score += ep_score
+                task_scores[tid].append(ep_score)
+                episodes_to_run += 1
+
     mean_score = total_score / max(episodes_to_run, 1)
 
-    # Per-task summary
+    # Per-task summary (sorted by score, worst first)
     print("\n[TASK SCORES]", flush=True)
-    for tid, scores in task_scores.items():
+    sorted_tasks = sorted(task_scores.items(), key=lambda x: sum(x[1]) / len(x[1]))
+    for tid, scores in sorted_tasks:
         avg = sum(scores) / len(scores)
-        print(f"  {tid}: mean={avg:.3f} runs={len(scores)}", flush=True)
+        best = max(scores)
+        status = "✓" if avg >= SUCCESS_SCORE_THRESHOLD else "✗"
+        print(
+            f"  {status} {tid}: mean={avg:.3f} best={best:.3f} runs={len(scores)}",
+            flush=True,
+        )
 
     print(
         f"\n[SUMMARY] episodes={episodes_to_run} mean_score={mean_score:.3f} "

@@ -134,6 +134,32 @@ class TestContractEnv(unittest.TestCase):
         # Empty
         self.assertEqual(_parse_opponent_stance([]), "neutral")
 
+    def test_concession_tracking(self) -> None:
+        """Track which specific topics the opponent has conceded on."""
+        from inference import _track_concessions
+
+        history = [
+            "opponent|[Counterparty] We can accept a cap on liability.",
+            "agent|step=1 action=FLAG_RISK content_len=10",
+            "opponent|[Counterparty] Termination flexibility is non-negotiable.",
+        ]
+        concessions = _track_concessions(history)
+        # "cap" should be conceded, "termination" should be firm
+        self.assertEqual(concessions.get("cap"), "conceded")
+        self.assertEqual(concessions.get("termination"), "firm")
+
+    def test_concession_summary_format(self) -> None:
+        """Concession summary should produce a readable string."""
+        from inference import _concession_summary
+
+        concessions = {"cap": "conceded", "termination": "firm"}
+        summary = _concession_summary(concessions)
+        self.assertIn("WILLING", summary)
+        self.assertIn("HOLDING FIRM", summary)
+
+        # Empty case
+        self.assertEqual(_concession_summary({}), "")
+
 
 if __name__ == "__main__":
     unittest.main()
